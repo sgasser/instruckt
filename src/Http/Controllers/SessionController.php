@@ -46,34 +46,48 @@ final class SessionController
         $session = InstrucktSession::query()->findOrFail($id);
 
         return response()->stream(function () use ($session) {
-            $lastId = 0;
+            // Hard 60-second timeout — EventSource auto-reconnects.
+            // Each reconnect sends Last-Event-ID so we don't miss updates.
+            $deadline = time() + 60;
+            $lastChecked = now()->subSecond(); // catch any updates from just before connect
 
-            while (true) {
+            while (time() < $deadline) {
                 if (connection_aborted()) {
                     break;
                 }
 
-                // Fetch annotations updated since we last checked
+                $cutoff = $lastChecked;
+                $lastChecked = now();
+
+                // Emit any annotations updated since last check (new OR status-changed)
                 $annotations = $session->annotations()
-                    ->where('updated_at', '>', now()->subSeconds(30))
-                    ->where('id', '>', (string) $lastId)
+                    ->where('updated_at', '>=', $cutoff)
                     ->get();
 
                 foreach ($annotations as $annotation) {
                     echo 'event: annotation.updated' . PHP_EOL;
+                    echo 'id: ' . $annotation->id . PHP_EOL;
                     echo 'data: ' . $annotation->toJson() . PHP_EOL;
                     echo PHP_EOL;
-                    $lastId = $annotation->id;
                 }
 
-                ob_flush();
-                flush();
+                if ($annotations->isNotEmpty()) {
+                    ob_flush();
+                    flush();
+                }
+
                 sleep(1);
             }
+
+            // Signal client to reconnect
+            echo ': reconnect' . PHP_EOL . PHP_EOL;
+            ob_flush();
+            flush();
         }, 200, [
             'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
+            'Cache-Control' => 'no-cache, no-store',
             'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
         ]);
     }
 }

@@ -6,17 +6,10 @@ namespace Instruckt\Laravel;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Instruckt\Laravel\Components\Toolbar;
+use Instruckt\Laravel\Console\InstallCommand;
 use Instruckt\Laravel\Http\Controllers\AnnotationController;
 use Instruckt\Laravel\Http\Controllers\SessionController;
-use Instruckt\Laravel\Mcp\Tools\AcknowledgeTool;
-use Instruckt\Laravel\Mcp\Tools\DismissTool;
-use Instruckt\Laravel\Mcp\Tools\GetAllPendingTool;
-use Instruckt\Laravel\Mcp\Tools\GetPendingTool;
-use Instruckt\Laravel\Mcp\Tools\GetSessionTool;
-use Instruckt\Laravel\Mcp\Tools\ListSessionsTool;
-use Instruckt\Laravel\Mcp\Tools\ReplyTool;
-use Instruckt\Laravel\Mcp\Tools\ResolveTool;
-use Instruckt\Laravel\Mcp\Tools\WatchAnnotationsTool;
 
 final class InstrucktServiceProvider extends ServiceProvider
 {
@@ -28,23 +21,26 @@ final class InstrucktServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'instruckt');
+        $this->loadViewComponentsAs('instruckt', [Toolbar::class]);
+
         $this->publishAssets();
-        $this->registerRoutes();
-        $this->registerMcpTools();
-        $this->registerBladeComponents();
+        $this->registerHttpRoutes();
+        $this->registerMcpRoutes();
 
         if ($this->app->runningInConsole()) {
-            $this->console();
+            $this->commands([InstallCommand::class]);
         }
     }
 
-    private function registerRoutes(): void
+    private function registerHttpRoutes(): void
     {
         if (! config('instruckt.enabled', true)) {
             return;
         }
 
-        Route::middleware(config('instruckt.middleware', ['web']))
+        // Use 'api' middleware by default — no CSRF verification needed for this dev-tool API.
+        // Users can override via config('instruckt.middleware') if they need session/auth.
+        Route::middleware(config('instruckt.middleware', ['api']))
             ->prefix(config('instruckt.route_prefix', 'instruckt'))
             ->name('instruckt.')
             ->group(function () {
@@ -58,40 +54,17 @@ final class InstrucktServiceProvider extends ServiceProvider
             });
     }
 
-    private function registerMcpTools(): void
+    private function registerMcpRoutes(): void
     {
         if (! config('instruckt.enabled', true)) {
             return;
         }
 
-        // Register tools with laravel/mcp if it's available
-        if (! class_exists(\Laravel\MCP\McpServiceProvider::class)) {
+        if (! class_exists(\Laravel\Mcp\Facades\Mcp::class)) {
             return;
         }
 
-        $tools = [
-            ListSessionsTool::class,
-            GetSessionTool::class,
-            GetPendingTool::class,
-            GetAllPendingTool::class,
-            AcknowledgeTool::class,
-            ResolveTool::class,
-            DismissTool::class,
-            ReplyTool::class,
-            WatchAnnotationsTool::class,
-        ];
-
-        foreach ($tools as $toolClass) {
-            $this->app->make(\Laravel\MCP\Server\McpServer::class)
-                ->tool($this->app->make($toolClass));
-        }
-    }
-
-    private function registerBladeComponents(): void
-    {
-        $this->loadViewComponentsAs('instruckt', [
-            Components\Toolbar::class,
-        ]);
+        $this->loadRoutesFrom(__DIR__ . '/../routes/mcp.php');
     }
 
     private function publishAssets(): void
@@ -107,12 +80,5 @@ final class InstrucktServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__ . '/../dist' => public_path('vendor/instruckt'),
         ], 'instruckt-assets');
-    }
-
-    private function console(): void
-    {
-        $this->commands([
-            Console\InstallCommand::class,
-        ]);
     }
 }

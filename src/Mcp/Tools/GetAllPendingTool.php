@@ -4,31 +4,17 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktAnnotation;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class GetAllPendingTool implements Tool
+#[Description('Get all pending annotations across every session. Use for a global view of unresolved user feedback.')]
+final class GetAllPendingTool extends Tool
 {
-    public function name(): string
-    {
-        return config('instruckt.mcp_prefix') . '_get_all_pending';
-    }
-
-    public function description(): string
-    {
-        return 'Get all pending annotations across every session. Use this to get a global view of unresolved feedback.';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => new \stdClass(),
-            'required' => [],
-        ];
-    }
-
-    public function handle(array $input): array
+    public function handle(Request $request): Response
     {
         $annotations = InstrucktAnnotation::query()
             ->whereIn('status', ['pending', 'acknowledged'])
@@ -36,9 +22,14 @@ final class GetAllPendingTool implements Tool
             ->oldest()
             ->get();
 
-        return [
+        return Response::text(json_encode([
             'count' => $annotations->count(),
             'annotations' => $annotations->toArray(),
-        ];
+        ], JSON_PRETTY_PRINT));
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
     }
 }

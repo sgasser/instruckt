@@ -4,42 +4,19 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktAnnotation;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class ResolveTool implements Tool
+#[Description('Mark an annotation as resolved. Optionally provide a summary of what was changed — it will be posted as an agent reply visible to the user.')]
+final class ResolveTool extends Tool
 {
-    public function name(): string
+    public function handle(Request $request): Response
     {
-        return config('instruckt.mcp_prefix') . '_resolve';
-    }
-
-    public function description(): string
-    {
-        return 'Mark an annotation as resolved. Optionally provide a summary of what was changed. The summary is posted as an agent thread message visible to the user.';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'annotation_id' => [
-                    'type' => 'string',
-                    'description' => 'The annotation ID to resolve',
-                ],
-                'summary' => [
-                    'type' => 'string',
-                    'description' => 'Optional summary of what was changed to address this feedback',
-                ],
-            ],
-            'required' => ['annotation_id'],
-        ];
-    }
-
-    public function handle(array $input): array
-    {
-        $annotation = InstrucktAnnotation::query()->findOrFail($input['annotation_id']);
+        $annotation = InstrucktAnnotation::query()->findOrFail($request->get('annotation_id'));
 
         $annotation->update([
             'status' => 'resolved',
@@ -47,10 +24,24 @@ final class ResolveTool implements Tool
             'resolved_at' => now(),
         ]);
 
-        if (!empty($input['summary'])) {
-            $annotation->addThreadMessage('agent', $input['summary']);
+        if ($summary = $request->get('summary')) {
+            $annotation->addThreadMessage('agent', $summary);
         }
 
-        return ['ok' => true, 'annotation' => $annotation->fresh()->toArray()];
+        return Response::text(json_encode([
+            'ok' => true,
+            'annotation' => $annotation->fresh()->toArray(),
+        ], JSON_PRETTY_PRINT));
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'annotation_id' => $schema->string()
+                ->description('The annotation ID to resolve.')
+                ->required(),
+            'summary' => $schema->string()
+                ->description('Optional summary of what was changed to address this feedback.'),
+        ];
     }
 }

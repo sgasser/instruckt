@@ -4,42 +4,19 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktAnnotation;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class DismissTool implements Tool
+#[Description('Dismiss an annotation with a reason. Use when feedback is not actionable or out of scope. The reason is posted as an agent reply visible to the user.')]
+final class DismissTool extends Tool
 {
-    public function name(): string
+    public function handle(Request $request): Response
     {
-        return config('instruckt.mcp_prefix') . '_dismiss';
-    }
-
-    public function description(): string
-    {
-        return 'Dismiss an annotation with a reason. Use this when the feedback is not actionable or out of scope. The reason is posted as an agent thread message visible to the user.';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'annotation_id' => [
-                    'type' => 'string',
-                    'description' => 'The annotation ID to dismiss',
-                ],
-                'reason' => [
-                    'type' => 'string',
-                    'description' => 'Explanation of why this feedback is being dismissed',
-                ],
-            ],
-            'required' => ['annotation_id', 'reason'],
-        ];
-    }
-
-    public function handle(array $input): array
-    {
-        $annotation = InstrucktAnnotation::query()->findOrFail($input['annotation_id']);
+        $annotation = InstrucktAnnotation::query()->findOrFail($request->get('annotation_id'));
 
         $annotation->update([
             'status' => 'dismissed',
@@ -47,8 +24,28 @@ final class DismissTool implements Tool
             'resolved_at' => now(),
         ]);
 
-        $annotation->addThreadMessage('agent', $input['reason']);
+        $reason = $request->get('reason');
+        if (empty($reason)) {
+            return Response::text(json_encode(['ok' => false, 'error' => 'reason is required'], JSON_PRETTY_PRINT));
+        }
 
-        return ['ok' => true, 'annotation' => $annotation->fresh()->toArray()];
+        $annotation->addThreadMessage('agent', $reason);
+
+        return Response::text(json_encode([
+            'ok' => true,
+            'annotation' => $annotation->fresh()->toArray(),
+        ], JSON_PRETTY_PRINT));
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'annotation_id' => $schema->string()
+                ->description('The annotation ID to dismiss.')
+                ->required(),
+            'reason' => $schema->string()
+                ->description('Explanation of why this feedback is being dismissed.')
+                ->required(),
+        ];
     }
 }

@@ -4,42 +4,32 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktSession;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class GetSessionTool implements Tool
+#[Description('Get a specific instruckt session with all its annotations. Returns element selectors, Livewire/Vue/Svelte component context, and thread messages.')]
+final class GetSessionTool extends Tool
 {
-    public function name(): string
+    public function handle(Request $request): Response
     {
-        return config('instruckt.mcp_prefix') . '_get_session';
-    }
+        $session = InstrucktSession::query()->findOrFail($request->get('session_id'));
 
-    public function description(): string
-    {
-        return 'Get a specific instruckt session with all its annotations. Returns full annotation details including element selectors, Livewire/Vue/Svelte component context, and thread messages.';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'session_id' => [
-                    'type' => 'string',
-                    'description' => 'The session ID to retrieve',
-                ],
-            ],
-            'required' => ['session_id'],
-        ];
-    }
-
-    public function handle(array $input): array
-    {
-        $session = InstrucktSession::query()->findOrFail($input['session_id']);
-
-        return [
+        return Response::text(json_encode([
             ...$session->toArray(),
             'annotations' => $session->annotations()->oldest()->get()->toArray(),
+        ], JSON_PRETTY_PRINT));
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'session_id' => $schema->string()
+                ->description('The session ID to retrieve.')
+                ->required(),
         ];
     }
 }
