@@ -1,0 +1,33 @@
+{
+  "name": "instruckt",
+  "version": "0.1.0",
+  "description": "Visual feedback tool for AI coding agents — framework-agnostic, Livewire-first",
+  "license": "MIT",
+  "author": "instruckt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/instruckt/instruckt"
+  },
+  "main": "dist/instruckt.cjs.js",
+  "module": "dist/instruckt.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/instruckt.cjs.js",
+      "import": "./dist/instruckt.esm.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
