@@ -4,40 +4,33 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktAnnotation;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class AcknowledgeTool implements Tool
+#[Description('Mark an annotation as acknowledged — signals to the user that the agent has seen their feedback and is working on it.')]
+final class AcknowledgeTool extends Tool
 {
-    public function name(): string
+    public function handle(Request $request): Response
     {
-        return config('instruckt.mcp_prefix') . '_acknowledge';
-    }
-
-    public function description(): string
-    {
-        return 'Mark an annotation as acknowledged — signals to the user that the agent has seen their feedback and is working on it.';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'annotation_id' => [
-                    'type' => 'string',
-                    'description' => 'The annotation ID to acknowledge',
-                ],
-            ],
-            'required' => ['annotation_id'],
-        ];
-    }
-
-    public function handle(array $input): array
-    {
-        $annotation = InstrucktAnnotation::query()->findOrFail($input['annotation_id']);
+        $annotation = InstrucktAnnotation::query()->findOrFail($request->get('annotation_id'));
         $annotation->update(['status' => 'acknowledged']);
 
-        return ['ok' => true, 'annotation' => $annotation->fresh()->toArray()];
+        return Response::text(json_encode([
+            'ok' => true,
+            'annotation' => $annotation->fresh()->toArray(),
+        ], JSON_PRETTY_PRINT));
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'annotation_id' => $schema->string()
+                ->description('The annotation ID to acknowledge.')
+                ->required(),
+        ];
     }
 }

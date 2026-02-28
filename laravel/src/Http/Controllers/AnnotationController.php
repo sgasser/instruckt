@@ -45,11 +45,12 @@ final class AnnotationController
             'comment' => 'sometimes|string|max:2000',
             'intent' => 'sometimes|string|in:fix,change,question,approve',
             'severity' => 'sometimes|string|in:blocking,important,suggestion',
+            'resolved_by' => 'sometimes|string|in:human,agent',
         ]);
 
-        if (isset($data['status']) && in_array($data['status'], ['resolved', 'dismissed'])) {
+        if (isset($data['status']) && in_array($data['status'], ['resolved', 'dismissed'], true)) {
             $data['resolved_at'] = now();
-            $data['resolved_by'] = $request->input('resolved_by', 'agent');
+            $data['resolved_by'] = $data['resolved_by'] ?? 'agent';
         }
 
         $annotation->update($data);

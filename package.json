@@ -10,7 +10,7 @@
   },
   "main": "dist/instruckt.cjs.js",
   "module": "dist/instruckt.esm.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/instruckt.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

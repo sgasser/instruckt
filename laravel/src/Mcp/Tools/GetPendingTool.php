@@ -4,44 +4,34 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktSession;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class GetPendingTool implements Tool
+#[Description('Get all pending (unacknowledged) annotations for a specific session.')]
+final class GetPendingTool extends Tool
 {
-    public function name(): string
+    public function handle(Request $request): Response
     {
-        return config('instruckt.mcp_prefix') . '_get_pending';
-    }
-
-    public function description(): string
-    {
-        return 'Get all pending (unacknowledged) annotations for a specific session.';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'session_id' => [
-                    'type' => 'string',
-                    'description' => 'The session ID to check for pending annotations',
-                ],
-            ],
-            'required' => ['session_id'],
-        ];
-    }
-
-    public function handle(array $input): array
-    {
-        $session = InstrucktSession::query()->findOrFail($input['session_id']);
+        $session = InstrucktSession::query()->findOrFail($request->get('session_id'));
         $annotations = $session->pendingAnnotations()->get();
 
-        return [
+        return Response::text(json_encode([
             'session_id' => $session->id,
             'count' => $annotations->count(),
             'annotations' => $annotations->toArray(),
+        ], JSON_PRETTY_PRINT));
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'session_id' => $schema->string()
+                ->description('The session ID to check for pending annotations.')
+                ->required(),
         ];
     }
 }

@@ -10,7 +10,11 @@ return [
     |--------------------------------------------------------------------------
     | Set to false in production or use an environment variable to gate access.
     */
-    'enabled' => (bool) env('INSTRUCKT_ENABLED', true),
+    /*
+    | Defaults to true only in local environments. Set INSTRUCKT_ENABLED=false
+    | to disable explicitly, or INSTRUCKT_ENABLED=true to enable on staging.
+    */
+    'enabled' => (bool) env('INSTRUCKT_ENABLED', env('APP_ENV') === 'local'),
 
     /*
     |--------------------------------------------------------------------------
@@ -27,7 +31,10 @@ return [
     | Applied to all instruckt API routes. 'web' gives you session/CSRF.
     | Add 'auth' here if you want to gate annotations to logged-in users.
     */
-    'middleware' => explode(',', env('INSTRUCKT_MIDDLEWARE', 'web')),
+    /*
+    | Uses 'api' by default (no CSRF). Add 'auth' here to gate to logged-in users.
+    */
+    'middleware' => explode(',', env('INSTRUCKT_MIDDLEWARE', 'api')),
 
     /*
     |--------------------------------------------------------------------------

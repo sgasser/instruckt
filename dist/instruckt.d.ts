@@ -69,6 +69,8 @@ interface InstrucktConfig {
     onSessionCreate?: (session: Session) => void;
 }
 
+type AnnotationPayload = Omit<Annotation, 'id' | 'sessionId' | 'status' | 'thread' | 'createdAt' | '_syncedTo'>;
+
 declare class Instruckt {
     private config;
     private api;
@@ -76,11 +78,18 @@ declare class Instruckt {
     private toolbar;
     private highlight;
     private popup;
+    private markers;
     private annotations;
     private session;
     private isAnnotating;
     private isFrozen;
     private frozenStyleEl;
+    private rafId;
+    private pendingMouseTarget;
+    private mutationObserver;
+    private boundKeydown;
+    private boundScroll;
+    private boundResize;
     constructor(config: InstrucktConfig);
     private init;
     private connectSession;
@@ -92,20 +101,18 @@ declare class Instruckt {
     private boundClick;
     private attachAnnotateListeners;
     private detachAnnotateListeners;
-    private onMouseMove;
-    private onMouseLeave;
-    private onClick;
-    private isInstrucktElement;
+    private isInstruckt;
     private detectFramework;
     private submitAnnotation;
+    private onMarkerClick;
     private onAnnotationUpdated;
-    private setupKeyboard;
+    private setupMutationObserver;
+    private onScrollResize;
+    private onKeydown;
     private pendingCount;
-    /** Programmatic API: get all current annotations */
+    private syncMarkersFromAnnotations;
     getAnnotations(): Annotation[];
-    /** Programmatic API: get current session */
     getSession(): Session | null;
-    /** Programmatic API: destroy and clean up */
     destroy(): void;
 }
 
@@ -121,4 +128,4 @@ declare class Instruckt {
  */
 declare function init(config: InstrucktConfig): Instruckt;
 
-export { type Annotation, type AnnotationIntent, type AnnotationSeverity, type AnnotationStatus, type FrameworkContext, Instruckt, type InstrucktConfig, type Session, init };
+export { type Annotation, type AnnotationIntent, type AnnotationPayload, type AnnotationSeverity, type AnnotationStatus, type FrameworkContext, Instruckt, type InstrucktConfig, type Session, init };

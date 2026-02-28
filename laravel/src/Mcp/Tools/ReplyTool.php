@@ -4,44 +4,36 @@ declare(strict_types=1);
 
 namespace Instruckt\Laravel\Mcp\Tools;
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Instruckt\Laravel\Models\InstrucktAnnotation;
-use Laravel\MCP\Contracts\Tool;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
-final class ReplyTool implements Tool
+#[Description('Add a reply to an annotation thread. Use to ask clarifying questions or provide status updates without resolving or dismissing.')]
+final class ReplyTool extends Tool
 {
-    public function name(): string
+    public function handle(Request $request): Response
     {
-        return config('instruckt.mcp_prefix') . '_reply';
+        $annotation = InstrucktAnnotation::query()->findOrFail($request->get('annotation_id'));
+        $annotation->addThreadMessage('agent', $request->get('content'));
+
+        return Response::text(json_encode([
+            'ok' => true,
+            'annotation' => $annotation->fresh()->toArray(),
+        ], JSON_PRETTY_PRINT));
     }
 
-    public function description(): string
-    {
-        return 'Add a reply to an annotation thread. Use this to ask clarifying questions or provide status updates without resolving or dismissing the annotation.';
-    }
-
-    public function inputSchema(): array
+    public function schema(JsonSchema $schema): array
     {
         return [
-            'type' => 'object',
-            'properties' => [
-                'annotation_id' => [
-                    'type' => 'string',
-                    'description' => 'The annotation ID to reply to',
-                ],
-                'content' => [
-                    'type' => 'string',
-                    'description' => 'The reply message content',
-                ],
-            ],
-            'required' => ['annotation_id', 'content'],
+            'annotation_id' => $schema->string()
+                ->description('The annotation ID to reply to.')
+                ->required(),
+            'content' => $schema->string()
+                ->description('The reply message content.')
+                ->required(),
         ];
-    }
-
-    public function handle(array $input): array
-    {
-        $annotation = InstrucktAnnotation::query()->findOrFail($input['annotation_id']);
-        $annotation->addThreadMessage('agent', $input['content']);
-
-        return ['ok' => true, 'annotation' => $annotation->fresh()->toArray()];
     }
 }

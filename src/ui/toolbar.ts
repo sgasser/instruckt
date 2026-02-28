@@ -1,4 +1,4 @@
-/** Builds and manages the floating toolbar DOM element */
+import { TOOLBAR_CSS } from './styles'
 
 export type ToolbarMode = 'idle' | 'annotating' | 'frozen'
 
@@ -8,10 +8,10 @@ interface ToolbarCallbacks {
 }
 
 export class Toolbar {
-  private el!: HTMLElement
+  private host!: HTMLElement
+  private shadow!: ShadowRoot
   private annotateBtn!: HTMLButtonElement
   private freezeBtn!: HTMLButtonElement
-  private annotationCount = 0
   private mode: ToolbarMode = 'idle'
   private dragging = false
   private dragOffset = { x: 0, y: 0 }
@@ -25,19 +25,24 @@ export class Toolbar {
   }
 
   private build(): void {
-    this.el = document.createElement('div')
-    this.el.id = 'instruckt-toolbar'
-    this.el.setAttribute('data-instruckt', 'toolbar')
+    this.host = document.createElement('div')
+    this.host.setAttribute('data-instruckt', 'toolbar')
+    this.shadow = this.host.attachShadow({ mode: 'open' })
 
-    // Annotate button
+    // Inject styles inside shadow root — fully isolated from host page CSS
+    const style = document.createElement('style')
+    style.textContent = TOOLBAR_CSS
+    this.shadow.appendChild(style)
+
+    const toolbar = document.createElement('div')
+    toolbar.className = 'toolbar'
+
     this.annotateBtn = this.makeBtn('✏️', 'Annotate elements (A)', () => {
       const next = this.mode !== 'annotating'
       this.setMode(next ? 'annotating' : 'idle')
       this.callbacks.onToggleAnnotate(next)
     })
-    this.annotateBtn.setAttribute('data-action', 'annotate')
 
-    // Freeze animations button
     this.freezeBtn = this.makeBtn('⏸', 'Freeze animations (F)', () => {
       const next = this.mode !== 'frozen'
       this.setMode(next ? 'frozen' : 'idle')
@@ -45,21 +50,21 @@ export class Toolbar {
     })
 
     const divider = document.createElement('div')
-    divider.className = 'ik-divider'
+    divider.className = 'divider'
 
-    this.el.append(this.annotateBtn, divider, this.freezeBtn)
+    toolbar.append(this.annotateBtn, divider, this.freezeBtn)
+    this.shadow.appendChild(toolbar)
 
-    // Position
     this.applyPosition()
-    document.body.appendChild(this.el)
+    document.body.appendChild(this.host)
   }
 
   private makeBtn(icon: string, title: string, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button')
-    btn.className = 'ik-btn'
+    btn.className = 'btn'
     btn.title = title
     btn.setAttribute('aria-label', title)
-    btn.innerHTML = icon
+    btn.textContent = icon
     btn.addEventListener('click', (e) => {
       e.stopPropagation()
       onClick()
@@ -68,39 +73,38 @@ export class Toolbar {
   }
 
   private applyPosition(): void {
-    const margin = '16px'
-    const pos = this.position
-    this.el.style.bottom = pos.includes('bottom') ? margin : 'auto'
-    this.el.style.top = pos.includes('top') ? margin : 'auto'
-    this.el.style.right = pos.includes('right') ? margin : 'auto'
-    this.el.style.left = pos.includes('left') ? margin : 'auto'
+    const m = '16px'
+    Object.assign(this.host.style, {
+      position: 'fixed',
+      zIndex: '2147483646',
+      bottom: this.position.includes('bottom') ? m : 'auto',
+      top: this.position.includes('top') ? m : 'auto',
+      right: this.position.includes('right') ? m : 'auto',
+      left: this.position.includes('left') ? m : 'auto',
+    })
   }
 
   private setupDrag(): void {
-    this.el.addEventListener('mousedown', (e) => {
-      // Only drag via the toolbar background, not buttons
-      if ((e.target as Element).closest('.ik-btn')) return
+    // Drag from the shadow root toolbar div (not buttons)
+    this.shadow.addEventListener('mousedown', (e) => {
+      if ((e.target as Element).closest('.btn')) return
       this.dragging = true
-      const rect = this.el.getBoundingClientRect()
-      this.dragOffset.x = e.clientX - rect.left
-      this.dragOffset.y = e.clientY - rect.top
-      this.el.style.transition = 'none'
+      const rect = this.host.getBoundingClientRect()
+      this.dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top }
       e.preventDefault()
     })
 
     document.addEventListener('mousemove', (e) => {
       if (!this.dragging) return
-      const x = e.clientX - this.dragOffset.x
-      const y = e.clientY - this.dragOffset.y
-      this.el.style.left = `${x}px`
-      this.el.style.top = `${y}px`
-      this.el.style.right = 'auto'
-      this.el.style.bottom = 'auto'
+      Object.assign(this.host.style, {
+        left: `${e.clientX - this.dragOffset.x}px`,
+        top: `${e.clientY - this.dragOffset.y}px`,
+        right: 'auto',
+        bottom: 'auto',
+      })
     })
 
-    document.addEventListener('mouseup', () => {
-      this.dragging = false
-    })
+    document.addEventListener('mouseup', () => { this.dragging = false })
   }
 
   setMode(mode: ToolbarMode): void {
@@ -111,14 +115,11 @@ export class Toolbar {
   }
 
   setAnnotationCount(count: number): void {
-    this.annotationCount = count
-    // Update badge on annotate button
-    let badge = this.annotateBtn.querySelector('.ik-badge')
+    let badge = this.annotateBtn.querySelector('.badge')
     if (count > 0) {
       if (!badge) {
         badge = document.createElement('span')
-        badge.className = 'ik-badge'
-        this.annotateBtn.style.position = 'relative'
+        badge.className = 'badge'
         this.annotateBtn.appendChild(badge)
       }
       badge.textContent = count > 99 ? '99+' : String(count)
@@ -128,7 +129,7 @@ export class Toolbar {
   }
 
   destroy(): void {
-    this.el.remove()
+    this.host.remove()
     document.body.classList.remove('ik-annotating')
   }
 }
