@@ -60,7 +60,7 @@ The install command automatically detects your AI agent and configures MCP. If y
 
 ## Storage
 
-Annotations are stored in `_instruckt/annotations.json` at your project root. No database migrations needed. Add `_instruckt/` to your `.gitignore`.
+Annotations are stored in `storage/app/_instruckt/annotations.json`. Screenshots are saved as PNGs in `storage/app/_instruckt/screenshots/`. No database migrations needed.
 
 ## MCP Tools
 
@@ -69,10 +69,8 @@ The package registers these MCP tools for your AI agent:
 | Tool | Description |
 |------|-------------|
 | `instruckt.get_all_pending` | Get all pending annotations |
-| `instruckt.acknowledge` | Mark an annotation as seen |
-| `instruckt.resolve` | Resolve an annotation |
-| `instruckt.dismiss` | Dismiss an annotation |
-| `instruckt.reply` | Reply to an annotation |
+| `instruckt.get_screenshot` | Get the screenshot image for an annotation |
+| `instruckt.resolve` | Mark an annotation as resolved (removes marker from browser) |
 
 ## Configuration
 
@@ -109,11 +107,11 @@ The `<x-instruckt-toolbar />` component accepts optional attributes:
 ## How It Works
 
 1. The Blade component loads `instruckt.iife.js` and initializes the annotation UI
-2. Users click elements and leave feedback
+2. Users click elements and leave feedback — optionally capturing screenshots
 3. Annotations auto-copy as structured markdown to the clipboard for pasting into AI agents
-4. Annotations are persisted to `_instruckt/annotations.json` via API routes
+4. Annotations are persisted to `storage/app/_instruckt/` via API routes
 5. On page reload (including Vite rebuilds), annotations are loaded from the API and markers reappear
-6. AI agents can read pending annotations via MCP tools and resolve/dismiss them after fixing
+6. AI agents can read pending annotations via MCP tools and resolve them after fixing
 
 ## API Routes
 
@@ -124,7 +122,20 @@ All routes are registered under the configured prefix (default: `/instruckt`):
 | GET | `/instruckt/annotations` | List all annotations |
 | POST | `/instruckt/annotations` | Create annotation |
 | PATCH | `/instruckt/annotations/{id}` | Update annotation |
-| POST | `/instruckt/annotations/{id}/reply` | Add reply |
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `A` | Toggle annotation mode |
+| `F` | Toggle freeze animations |
+| `C` | Screenshot region capture |
+| `X` | Clear annotations on current page |
+| `Esc` | Exit annotation/freeze mode |
+
+## Secure Context Note
+
+`navigator.clipboard` requires a secure context (HTTPS or localhost). On `http://*.test` domains, auto-copy on annotation submit is skipped. Use the copy button in the toolbar which uses a fallback method.
 
 ## License
 
