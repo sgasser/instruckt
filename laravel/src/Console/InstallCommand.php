@@ -196,66 +196,49 @@ final class InstallCommand extends Command
     private function injectInertiaToolbar(string $framework): void
     {
         $jsFramework = str_replace('inertia-', '', $framework);
-
-        // For Inertia apps, the layout is resources/views/app.blade.php
-        $layoutPath = resource_path('views/app.blade.php');
-
-        if (! File::exists($layoutPath)) {
-            $this->components->warn('Could not find resources/views/app.blade.php');
-            $this->line('  Add the instruckt script tag before </body> in your Inertia layout.');
-
-            return;
-        }
-
-        $contents = File::get($layoutPath);
-
-        if (str_contains($contents, 'instruckt')) {
-            $this->line('  Inertia layout already has instruckt configured.');
-
-            return;
-        }
-
-        if (! str_contains($contents, '</body>')) {
-            $this->components->warn('Could not find </body> in Inertia layout.');
-
-            return;
-        }
-
         $routePrefix = config('instruckt.route_prefix', 'instruckt');
 
-        // Inject the IIFE script + init before </body>
-        $scriptBlock = <<<BLADE
-        @if(config('instruckt.enabled'))
-        <script src="{{ config('instruckt.cdn_url') ?? asset('vendor/instruckt/instruckt.iife.js') }}"></script>
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                Instruckt.init({
-                    endpoint: '/{$routePrefix}',
-                    adapters: ['{$jsFramework}'],
-                });
-            });
-        </script>
-        @endif
-        BLADE;
+        // Find the JS/TS entry point
+        $candidates = [
+            resource_path('js/app.tsx'),
+            resource_path('js/app.ts'),
+            resource_path('js/app.jsx'),
+            resource_path('js/app.js'),
+        ];
 
-        if (preg_match('/^([ \t]*)<\/body>/m', $contents, $matches)) {
-            $indent = $matches[1];
-            // Re-indent the script block to match
-            $lines = explode("\n", $scriptBlock);
-            $indented = array_map(fn ($line) => $line !== '' ? $indent.$line : $line, $lines);
-            $scriptBlock = implode("\n", $indented);
-            $contents = preg_replace('/^([ \t]*)<\/body>/m', $scriptBlock."\n{$indent}</body>", $contents, 1);
-        } else {
-            $contents = str_replace('</body>', $scriptBlock."\n</body>", $contents);
+        $appPath = null;
+
+        foreach ($candidates as $candidate) {
+            if (File::exists($candidate)) {
+                $appPath = $candidate;
+
+                break;
+            }
         }
 
-        File::put($layoutPath, $contents);
-        $this->components->info('Injected instruckt into resources/views/app.blade.php');
+        if (! $appPath) {
+            $this->components->warn('Could not find resources/js/app.{tsx,ts,jsx,js}');
+            $this->line("  Add this to your app entry point:");
+            $this->line("  import { Instruckt } from 'instruckt';");
+            $this->line("  new Instruckt({ endpoint: '/{$routePrefix}' });");
 
-        // Prompt to install npm package (useful for importing in JS if they want the API)
-        $this->newLine();
-        $this->components->warn("Optional: install the npm package for programmatic access:");
-        $this->line("  npm install instruckt");
+            return;
+        }
+
+        $contents = File::get($appPath);
+        $relative = str_replace(base_path().'/', '', $appPath);
+
+        if (str_contains($contents, 'instruckt')) {
+            $this->line("  {$relative} already has instruckt configured.");
+
+            return;
+        }
+
+        // Append the import and init at the end of the file
+        $snippet = "\n// Instruckt — visual feedback toolbar\nimport { Instruckt } from 'instruckt';\nnew Instruckt({ endpoint: '/{$routePrefix}', adapters: ['{$jsFramework}'] });\n";
+
+        File::append($appPath, $snippet);
+        $this->components->info("Injected instruckt into {$relative}");
     }
 
     private function injectBladeToolbar(string $framework): void
