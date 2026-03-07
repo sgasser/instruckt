@@ -13,10 +13,9 @@ function hasShadowDOM(): boolean {
   // Check for any custom elements with shadow roots
   const el = document.querySelector('[data-flux], flux\\:button, flux\\:input, [is]')
   if (el) return true
-  // Quick check: any element with an open shadow root
-  const body = document.body
-  for (const child of body.querySelectorAll('*')) {
-    if (child.shadowRoot) return true
+  // Quick check: any non-instruckt element with an open shadow root
+  for (const child of document.body.querySelectorAll('*')) {
+    if (child.shadowRoot && !child.hasAttribute('data-instruckt')) return true
   }
   return false
 }

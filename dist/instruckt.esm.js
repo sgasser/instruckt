@@ -2353,9 +2353,8 @@ function hasShadowDOM() {
   if ((_a2 = document.adoptedStyleSheets) == null ? void 0 : _a2.length) return true;
   const el = document.querySelector("[data-flux], flux\\:button, flux\\:input, [is]");
   if (el) return true;
-  const body = document.body;
-  for (const child of body.querySelectorAll("*")) {
-    if (child.shadowRoot) return true;
+  for (const child of document.body.querySelectorAll("*")) {
+    if (child.shadowRoot && !child.hasAttribute("data-instruckt")) return true;
   }
   return false;
 }
