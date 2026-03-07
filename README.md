@@ -1,6 +1,6 @@
 # instruckt
 
-Visual feedback tool for AI coding agents. Click on any element in your app, leave a note, and copy structured markdown to paste into your AI agent — no screenshots needed.
+Visual feedback tool for AI coding agents. Click on any element in your app, leave a note, capture screenshots, and copy structured markdown to paste into your AI agent.
 
 Framework-agnostic JS core with adapters for Livewire, Vue, Svelte, and React.
 
@@ -40,7 +40,7 @@ Or with the IIFE build:
 1. A floating toolbar appears in your app
 2. Press **A** or click the annotate button to enter annotation mode
 3. Hover over any element — instruckt highlights it and detects its framework component
-4. Click to annotate — type your feedback and save
+4. Click to annotate — type your feedback, optionally capture a screenshot, and save
 5. Annotations auto-copy as structured markdown to your clipboard (requires secure context — `https://` or `localhost`)
 6. Paste into any AI coding agent (Claude Code, Cursor, Codex, Copilot, OpenCode, etc.)
 7. The agent reads the markdown and makes the requested code changes
@@ -56,6 +56,7 @@ Or with the IIFE build:
 - Element: `button.btn-primary` in `pages::auth.login`
 - Classes: `btn btn-primary`
 - Text: "Submit Login"
+- Screenshot: `storage/app/_instruckt/screenshots/01JWXYZ.png`
 
 ## 2. Make the login card have rounded corners
 - Element: `div.bg-white` in `pages::auth.login`
@@ -89,12 +90,14 @@ new Instruckt({
 |-----|--------|
 | `A` | Toggle annotation mode |
 | `F` | Freeze page (pause animations, block navigation) |
+| `C` | Screenshot region capture |
 | `X` | Clear all annotations on this page |
 | `Esc` | Exit annotation/freeze mode |
 
 ## Features
 
 - **Framework detection** — automatically identifies Livewire, Vue, Svelte, and React components
+- **Screenshots** — capture element or region screenshots attached to annotations
 - **Shadow DOM isolation** — all UI renders in shadow roots so it never conflicts with your styles
 - **Copy as markdown** — annotations auto-copy as structured markdown optimized for AI agents
 - **Freeze mode** — pause animations, freeze popovers/dropdowns, and block all navigation
@@ -102,7 +105,7 @@ new Instruckt({
 - **Minimize** — collapse to a small floating button with annotation count badge
 - **Page-scoped markers** — annotation pins reposition on scroll/resize and only appear on the page where they were created
 - **Clear controls** — clear current page (`X` key or trash icon), or clear all pages via flyout
-- **SPA navigation** — survives `wire:navigate`, Vue Router, React Router, and browser back/forward
+- **SPA navigation** — survives `wire:navigate`, Inertia, Vue Router, React Router, and browser back/forward
 
 ## Public API
 

@@ -70,7 +70,6 @@ export class AnnotationMarkers {
   private statusClass(status: string): string {
     if (status === 'resolved') return 'resolved'
     if (status === 'dismissed') return 'dismissed'
-    if (status === 'acknowledged') return 'acknowledged'
     return ''
   }
 

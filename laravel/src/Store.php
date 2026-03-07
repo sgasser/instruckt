@@ -44,10 +44,66 @@ final class Store
         file_put_contents($path, json_encode(array_values($annotations), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX);
     }
 
+    private static function screenshotDir(): string
+    {
+        return storage_path('app/_instruckt/screenshots');
+    }
+
+    /**
+     * Delete the screenshot file for an annotation if it exists.
+     */
+    private static function deleteScreenshot(?string $screenshotPath): void
+    {
+        if (! $screenshotPath) {
+            return;
+        }
+
+        $path = storage_path("app/_instruckt/{$screenshotPath}");
+
+        if (file_exists($path)) {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * Save a base64 data URL screenshot to disk and return the relative path.
+     */
+    private static function saveScreenshot(string $id, string $dataUrl): ?string
+    {
+        if (! str_starts_with($dataUrl, 'data:image/')) {
+            return null;
+        }
+
+        $dir = self::screenshotDir();
+
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        // Extract binary data from data URL
+        $parts = explode(',', $dataUrl, 2);
+        $binary = base64_decode($parts[1] ?? '');
+
+        if (! $binary) {
+            return null;
+        }
+
+        $filename = "{$id}.png";
+        file_put_contents("{$dir}/{$filename}", $binary);
+
+        return "screenshots/{$filename}";
+    }
+
     public static function createAnnotation(array $data): array
     {
         $id = (string) Str::ulid();
         $now = now()->toIso8601String();
+
+        // Save screenshot file if provided
+        $screenshot = null;
+        if (! empty($data['screenshot'])) {
+            $screenshot = self::saveScreenshot($id, $data['screenshot']);
+        }
 
         $annotation = [
             'id' => $id,
@@ -61,6 +117,7 @@ final class Store
             'nearby_text' => $data['nearby_text'] ?? null,
             'selected_text' => $data['selected_text'] ?? null,
             'bounding_box' => $data['bounding_box'] ?? null,
+            'screenshot' => $screenshot,
             'intent' => $data['intent'] ?? 'fix',
             'severity' => $data['severity'] ?? 'important',
             'status' => 'pending',
@@ -122,6 +179,12 @@ final class Store
             $found = true;
             $updated = $annotation;
 
+            // Clean up screenshot when annotation is resolved or dismissed
+            $newStatus = $data['status'] ?? null;
+            if (in_array($newStatus, ['resolved', 'dismissed'], true)) {
+                self::deleteScreenshot($annotation['screenshot'] ?? null);
+            }
+
             break;
         }
         unset($annotation);
@@ -135,32 +198,6 @@ final class Store
         return $updated;
     }
 
-    public static function addThreadMessage(string $annotationId, string $role, string $content): array
-    {
-        $all = self::readAll();
-
-        foreach ($all as &$annotation) {
-            if ($annotation['id'] !== $annotationId) {
-                continue;
-            }
-
-            $annotation['thread'][] = [
-                'id' => (string) Str::ulid(),
-                'role' => $role,
-                'content' => $content,
-                'timestamp' => now()->toIso8601String(),
-            ];
-
-            $annotation['updated_at'] = now()->toIso8601String();
-            self::writeAll($all);
-
-            return $annotation;
-        }
-        unset($annotation);
-
-        abort(404, 'Annotation not found.');
-    }
-
     public static function allAnnotations(): array
     {
         return self::readAll();
@@ -170,7 +207,7 @@ final class Store
     {
         return array_values(array_filter(
             self::readAll(),
-            fn (array $a) => in_array($a['status'], ['pending', 'acknowledged'], true),
+            fn (array $a) => $a['status'] === 'pending',
         ));
     }
 }

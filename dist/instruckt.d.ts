@@ -1,12 +1,6 @@
 type AnnotationIntent = 'fix' | 'change' | 'question' | 'approve';
 type AnnotationSeverity = 'blocking' | 'important' | 'suggestion';
-type AnnotationStatus = 'pending' | 'acknowledged' | 'resolved' | 'dismissed';
-interface ThreadMessage {
-    id: string;
-    role: 'human' | 'agent';
-    content: string;
-    timestamp: string;
-}
+type AnnotationStatus = 'pending' | 'resolved' | 'dismissed';
 interface FrameworkContext {
     framework: 'livewire' | 'vue' | 'svelte' | 'react';
     component: string;
@@ -32,10 +26,10 @@ interface Annotation {
     boundingBox: BoundingBox;
     selectedText?: string;
     nearbyText?: string;
+    screenshot?: string;
     intent: AnnotationIntent;
     severity: AnnotationSeverity;
     status: AnnotationStatus;
-    thread: ThreadMessage[];
     framework?: FrameworkContext;
     createdAt: string;
     updatedAt?: string;
@@ -114,9 +108,11 @@ declare class Instruckt {
     /** Block mousedown/pointerdown in annotation mode so SPA frameworks can't navigate */
     private boundAnnotateBlock;
     private boundClick;
+    private showAnnotationPopup;
     private attachAnnotateListeners;
     private detachAnnotateListeners;
     private isInstruckt;
+    private startRegionCapture;
     private detectFramework;
     private submitAnnotation;
     private onMarkerClick;

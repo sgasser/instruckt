@@ -79,13 +79,4 @@ export class InstrucktApi {
     return toCamelCase(await res.json()) as unknown as Annotation
   }
 
-  async addReply(annotationId: string, content: string, role: 'human' | 'agent' = 'human'): Promise<Annotation> {
-    const res = await fetch(`${this.endpoint}/annotations/${annotationId}/reply`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ role, content }),
-    })
-    if (!res.ok) throw new Error(`instruckt: failed to add reply (${res.status})`)
-    return toCamelCase(await res.json()) as unknown as Annotation
-  }
 }

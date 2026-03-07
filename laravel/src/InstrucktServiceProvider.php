@@ -46,7 +46,6 @@ final class InstrucktServiceProvider extends ServiceProvider
                 Route::get('annotations', [AnnotationController::class, 'index'])->name('annotations.index');
                 Route::post('annotations', [AnnotationController::class, 'store'])->name('annotations.store');
                 Route::patch('annotations/{id}', [AnnotationController::class, 'update'])->name('annotations.update');
-                Route::post('annotations/{id}/reply', [AnnotationController::class, 'reply'])->name('annotations.reply');
             });
     }
 

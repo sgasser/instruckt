@@ -1,13 +1,6 @@
 export type AnnotationIntent = 'fix' | 'change' | 'question' | 'approve'
 export type AnnotationSeverity = 'blocking' | 'important' | 'suggestion'
-export type AnnotationStatus = 'pending' | 'acknowledged' | 'resolved' | 'dismissed'
-
-export interface ThreadMessage {
-  id: string
-  role: 'human' | 'agent'
-  content: string
-  timestamp: string
-}
+export type AnnotationStatus = 'pending' | 'resolved' | 'dismissed'
 
 export interface FrameworkContext {
   framework: 'livewire' | 'vue' | 'svelte' | 'react'
@@ -38,10 +31,10 @@ export interface Annotation {
   boundingBox: BoundingBox
   selectedText?: string
   nearbyText?: string
+  screenshot?: string
   intent: AnnotationIntent
   severity: AnnotationSeverity
   status: AnnotationStatus
-  thread: ThreadMessage[]
   framework?: FrameworkContext
   createdAt: string
   updatedAt?: string
@@ -74,5 +67,6 @@ export interface PendingAnnotation {
   y: number
   selectedText?: string
   nearbyText?: string
+  screenshot?: string
   framework?: FrameworkContext
 }

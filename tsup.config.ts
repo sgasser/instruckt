@@ -25,6 +25,7 @@ export default defineConfig([
     outExtension: ({ format }) => ({
       js: format === 'esm' ? '.esm.js' : '.cjs.js',
     }),
+    noExternal: ['html-to-image'],
     sourcemap: true,
     dts: true,
     platform: 'browser',

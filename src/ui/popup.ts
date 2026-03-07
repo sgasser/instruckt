@@ -1,8 +1,10 @@
 import type { Annotation, PendingAnnotation } from '../types'
 import { POPUP_CSS } from './styles'
+import { captureElement } from './screenshot'
 
 interface PopupResult {
   comment: string
+  screenshot?: string
 }
 
 interface PopupCallbacks {
@@ -46,6 +48,7 @@ export class AnnotationPopup {
     const selText = pending.selectedText
       ? `<div class="selected-text">"${esc(pending.selectedText.slice(0, 80))}"</div>`
       : ''
+    const hasScreenshot = !!pending.screenshot
 
     popup.innerHTML = `
       <div class="header">
@@ -53,19 +56,58 @@ export class AnnotationPopup {
         <button class="close-btn" title="Cancel (Esc)">✕</button>
       </div>
       ${fwBadge}${selText}
-      <textarea placeholder="What needs to change here?" rows="3"></textarea>
+      <div class="screenshot-slot">${hasScreenshot
+        ? `<div class="screenshot-preview"><img src="${pending.screenshot}" alt="Screenshot" /><button class="screenshot-remove" title="Remove screenshot">✕</button></div>`
+        : `<button class="btn-capture" data-action="capture"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture screenshot</button>`
+      }</div>
+      <textarea placeholder="${hasScreenshot ? 'Add a note (optional)' : 'What needs to change here?'}" rows="3"></textarea>
       <div class="actions">
         <button class="btn-secondary" data-action="cancel">Cancel</button>
-        <button class="btn-primary" data-action="submit" disabled>Add note</button>
+        <button class="btn-primary" data-action="submit" ${hasScreenshot ? '' : 'disabled'}>Add note</button>
       </div>
     `
 
+    let currentScreenshot = pending.screenshot ?? null
     const textarea = popup.querySelector('textarea')!
     const submitBtn = popup.querySelector<HTMLButtonElement>('[data-action="submit"]')!
+    const screenshotSlot = popup.querySelector('.screenshot-slot')!
 
-    textarea.addEventListener('input', () => {
-      submitBtn.disabled = textarea.value.trim().length === 0
-    })
+    const updateSubmitState = () => {
+      submitBtn.disabled = !currentScreenshot && textarea.value.trim().length === 0
+    }
+
+    const attachScreenshotEvents = () => {
+      // Capture button
+      const captureBtn = screenshotSlot.querySelector('[data-action="capture"]')
+      captureBtn?.addEventListener('click', async () => {
+        captureBtn.textContent = 'Capturing...'
+        const dataUrl = await captureElement(pending.element)
+        if (dataUrl) {
+          currentScreenshot = dataUrl
+          screenshotSlot.innerHTML = `<div class="screenshot-preview"><img src="${dataUrl}" alt="Screenshot" /><button class="screenshot-remove" title="Remove screenshot">✕</button></div>`
+          textarea.placeholder = 'Add a note (optional)'
+          attachScreenshotEvents()
+          updateSubmitState()
+        } else {
+          captureBtn.textContent = 'Capture failed'
+          setTimeout(() => { if (captureBtn.parentElement) captureBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture screenshot` }, 1500)
+        }
+      })
+
+      // Remove button
+      const removeBtn = screenshotSlot.querySelector('.screenshot-remove')
+      removeBtn?.addEventListener('click', () => {
+        currentScreenshot = null
+        screenshotSlot.innerHTML = `<button class="btn-capture" data-action="capture"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture screenshot</button>`
+        textarea.placeholder = 'What needs to change here?'
+        attachScreenshotEvents()
+        updateSubmitState()
+      })
+    }
+
+    attachScreenshotEvents()
+
+    textarea.addEventListener('input', updateSubmitState)
     textarea.addEventListener('keydown', (e) => {
       // Stop ALL keyboard events from reaching page forms (React, Inertia, etc.)
       e.stopPropagation()
@@ -84,8 +126,8 @@ export class AnnotationPopup {
     })
     submitBtn.addEventListener('click', () => {
       const comment = textarea.value.trim()
-      if (!comment) return
-      callbacks.onSubmit({ comment })
+      if (!comment && !currentScreenshot) return
+      callbacks.onSubmit({ comment: comment || '(screenshot)', screenshot: currentScreenshot ?? undefined })
       this.destroy()
     })
 

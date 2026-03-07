@@ -18,6 +18,14 @@ final class GetAllPendingTool extends Tool
     {
         $annotations = Store::getPendingAnnotations();
 
+        // Replace screenshot file paths with a boolean flag — agents should
+        // call get_screenshot to retrieve the actual image data.
+        foreach ($annotations as &$a) {
+            $a['has_screenshot'] = ! empty($a['screenshot']);
+            unset($a['screenshot']);
+        }
+        unset($a);
+
         return Response::text(json_encode([
             'count' => count($annotations),
             'annotations' => $annotations,

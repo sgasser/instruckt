@@ -5,6 +5,7 @@ export type ToolbarMode = 'idle' | 'annotating' | 'frozen'
 interface ToolbarCallbacks {
   onToggleAnnotate: (active: boolean) => void
   onFreezeAnimations: (frozen: boolean) => void
+  onScreenshot: () => void
   onCopy: () => void
   onClearPage?: () => void
   onClearAll?: () => void
@@ -20,6 +21,7 @@ const ICONS = {
   check: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
   clear: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
   minimize: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><line x1="12" y1="6" x2="12" y2="18"/></svg>`,
+  screenshot: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
   logo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`,
 } as const
 
@@ -72,6 +74,10 @@ export class Toolbar {
       this.callbacks.onFreezeAnimations(next)
     })
 
+    const screenshotBtn = this.makeBtn(ICONS.screenshot, 'Screenshot region (C)', () => {
+      this.callbacks.onScreenshot()
+    })
+
     this.copyBtn = this.makeBtn(ICONS.copy, 'Copy annotations as markdown', () => {
       this.callbacks.onCopy()
       this.copyBtn.innerHTML = ICONS.check
@@ -106,7 +112,7 @@ export class Toolbar {
     const mkDiv = () => { const d = document.createElement('div'); d.className = 'divider'; return d }
 
     this.toolbarEl.append(
-      this.annotateBtn, mkDiv(), this.freezeBtn, mkDiv(),
+      this.annotateBtn, screenshotBtn, mkDiv(), this.freezeBtn, mkDiv(),
       this.copyBtn, clearWrap, mkDiv(), minimizeBtn,
     )
     this.shadow.appendChild(this.toolbarEl)

@@ -262,6 +262,60 @@ export const POPUP_CSS = /* css */ `
 .chip.important.sel { background:#f97316; border-color:#f97316; }
 .chip.suggestion.sel{ background:#22c55e; border-color:#22c55e; }
 
+.screenshot-slot { margin-bottom: 10px; }
+
+.btn-capture {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px dashed var(--ik-border);
+  border-radius: 6px;
+  background: var(--ik-bg2);
+  color: var(--ik-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.btn-capture:hover {
+  border-color: var(--ik-accent);
+  color: var(--ik-accent);
+}
+.btn-capture svg { flex-shrink: 0; }
+
+.screenshot-preview {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--ik-border);
+}
+.screenshot-preview img {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  background: var(--ik-bg2);
+}
+.screenshot-remove {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.screenshot-remove:hover { background: #ef4444; }
+
 textarea {
   width:100%; min-height:80px; resize:vertical;
   border:1px solid var(--ik-border); border-radius:6px;
@@ -312,7 +366,6 @@ textarea::placeholder { color:var(--ik-muted); }
   border-radius:4px; padding:2px 6px;
 }
 .status-badge.pending      { background:rgba(99,102,241,.15); color:var(--ik-accent); }
-.status-badge.acknowledged { background:rgba(249,115,22,.15); color:#f97316; }
 .status-badge.resolved     { background:rgba(34,197,94,.15); color:#22c55e; }
 .status-badge.dismissed    { background:var(--ik-bg2); color:var(--ik-muted); }
 `
@@ -338,7 +391,6 @@ export const MARKER_CSS = /* css */ `
 .ik-marker:hover { transform: scale(1.15); }
 .ik-marker.resolved  { background: #22c55e; box-shadow: 0 2px 8px rgba(34,197,94,.4); }
 .ik-marker.dismissed { background: #71717a; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-.ik-marker.acknowledged { background: #f97316; box-shadow: 0 2px 8px rgba(249,115,22,.4); }
 `
 
 /** Inject styles into document.head (idempotent) */

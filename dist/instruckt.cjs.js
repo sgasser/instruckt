@@ -103,15 +103,6 @@ var InstrucktApi = class {
     if (!res.ok) throw new Error(`instruckt: failed to update annotation (${res.status})`);
     return toCamelCase(await res.json());
   }
-  async addReply(annotationId, content, role = "human") {
-    const res = await fetch(`${this.endpoint}/annotations/${annotationId}/reply`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ role, content })
-    });
-    if (!res.ok) throw new Error(`instruckt: failed to add reply (${res.status})`);
-    return toCamelCase(await res.json());
-  }
 };
 
 // src/ui/styles.ts
@@ -382,6 +373,60 @@ var POPUP_CSS = (
 .chip.important.sel { background:#f97316; border-color:#f97316; }
 .chip.suggestion.sel{ background:#22c55e; border-color:#22c55e; }
 
+.screenshot-slot { margin-bottom: 10px; }
+
+.btn-capture {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px dashed var(--ik-border);
+  border-radius: 6px;
+  background: var(--ik-bg2);
+  color: var(--ik-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.btn-capture:hover {
+  border-color: var(--ik-accent);
+  color: var(--ik-accent);
+}
+.btn-capture svg { flex-shrink: 0; }
+
+.screenshot-preview {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--ik-border);
+}
+.screenshot-preview img {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  background: var(--ik-bg2);
+}
+.screenshot-remove {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.screenshot-remove:hover { background: #ef4444; }
+
 textarea {
   width:100%; min-height:80px; resize:vertical;
   border:1px solid var(--ik-border); border-radius:6px;
@@ -432,7 +477,6 @@ textarea::placeholder { color:var(--ik-muted); }
   border-radius:4px; padding:2px 6px;
 }
 .status-badge.pending      { background:rgba(99,102,241,.15); color:var(--ik-accent); }
-.status-badge.acknowledged { background:rgba(249,115,22,.15); color:#f97316; }
 .status-badge.resolved     { background:rgba(34,197,94,.15); color:#22c55e; }
 .status-badge.dismissed    { background:var(--ik-bg2); color:var(--ik-muted); }
 `
@@ -459,7 +503,6 @@ var MARKER_CSS = (
 .ik-marker:hover { transform: scale(1.15); }
 .ik-marker.resolved  { background: #22c55e; box-shadow: 0 2px 8px rgba(34,197,94,.4); }
 .ik-marker.dismissed { background: #71717a; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-.ik-marker.acknowledged { background: #f97316; box-shadow: 0 2px 8px rgba(249,115,22,.4); }
 `
 );
 function injectGlobalStyles() {
@@ -478,6 +521,7 @@ var ICONS = {
   check: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
   clear: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
   minimize: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><line x1="12" y1="6" x2="12" y2="18"/></svg>`,
+  screenshot: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
   logo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`
 };
 var Toolbar = class {
@@ -513,6 +557,9 @@ var Toolbar = class {
       const next = !this.freezeActive;
       this.setFreezeActive(next);
       this.callbacks.onFreezeAnimations(next);
+    });
+    const screenshotBtn = this.makeBtn(ICONS.screenshot, "Screenshot region (C)", () => {
+      this.callbacks.onScreenshot();
     });
     this.copyBtn = this.makeBtn(ICONS.copy, "Copy annotations as markdown", () => {
       this.callbacks.onCopy();
@@ -552,6 +599,7 @@ var Toolbar = class {
     };
     this.toolbarEl.append(
       this.annotateBtn,
+      screenshotBtn,
       mkDiv(),
       this.freezeBtn,
       mkDiv(),
@@ -734,6 +782,946 @@ var ElementHighlight = class {
   }
 };
 
+// node_modules/html-to-image/es/util.js
+function resolveUrl(url, baseUrl) {
+  if (url.match(/^[a-z]+:\/\//i)) {
+    return url;
+  }
+  if (url.match(/^\/\//)) {
+    return window.location.protocol + url;
+  }
+  if (url.match(/^[a-z]+:/i)) {
+    return url;
+  }
+  const doc = document.implementation.createHTMLDocument();
+  const base = doc.createElement("base");
+  const a = doc.createElement("a");
+  doc.head.appendChild(base);
+  doc.body.appendChild(a);
+  if (baseUrl) {
+    base.href = baseUrl;
+  }
+  a.href = url;
+  return a.href;
+}
+var uuid = /* @__PURE__ */ (() => {
+  let counter = 0;
+  const random = () => (
+    // eslint-disable-next-line no-bitwise
+    `0000${(Math.random() * 36 ** 4 << 0).toString(36)}`.slice(-4)
+  );
+  return () => {
+    counter += 1;
+    return `u${random()}${counter}`;
+  };
+})();
+function toArray(arrayLike) {
+  const arr = [];
+  for (let i = 0, l = arrayLike.length; i < l; i++) {
+    arr.push(arrayLike[i]);
+  }
+  return arr;
+}
+var styleProps = null;
+function getStyleProperties(options = {}) {
+  if (styleProps) {
+    return styleProps;
+  }
+  if (options.includeStyleProperties) {
+    styleProps = options.includeStyleProperties;
+    return styleProps;
+  }
+  styleProps = toArray(window.getComputedStyle(document.documentElement));
+  return styleProps;
+}
+function px(node, styleProperty) {
+  const win = node.ownerDocument.defaultView || window;
+  const val = win.getComputedStyle(node).getPropertyValue(styleProperty);
+  return val ? parseFloat(val.replace("px", "")) : 0;
+}
+function getNodeWidth(node) {
+  const leftBorder = px(node, "border-left-width");
+  const rightBorder = px(node, "border-right-width");
+  return node.clientWidth + leftBorder + rightBorder;
+}
+function getNodeHeight(node) {
+  const topBorder = px(node, "border-top-width");
+  const bottomBorder = px(node, "border-bottom-width");
+  return node.clientHeight + topBorder + bottomBorder;
+}
+function getImageSize(targetNode, options = {}) {
+  const width = options.width || getNodeWidth(targetNode);
+  const height = options.height || getNodeHeight(targetNode);
+  return { width, height };
+}
+function getPixelRatio() {
+  let ratio;
+  let FINAL_PROCESS;
+  try {
+    FINAL_PROCESS = process;
+  } catch (e) {
+  }
+  const val = FINAL_PROCESS && FINAL_PROCESS.env ? FINAL_PROCESS.env.devicePixelRatio : null;
+  if (val) {
+    ratio = parseInt(val, 10);
+    if (Number.isNaN(ratio)) {
+      ratio = 1;
+    }
+  }
+  return ratio || window.devicePixelRatio || 1;
+}
+var canvasDimensionLimit = 16384;
+function checkCanvasDimensions(canvas) {
+  if (canvas.width > canvasDimensionLimit || canvas.height > canvasDimensionLimit) {
+    if (canvas.width > canvasDimensionLimit && canvas.height > canvasDimensionLimit) {
+      if (canvas.width > canvas.height) {
+        canvas.height *= canvasDimensionLimit / canvas.width;
+        canvas.width = canvasDimensionLimit;
+      } else {
+        canvas.width *= canvasDimensionLimit / canvas.height;
+        canvas.height = canvasDimensionLimit;
+      }
+    } else if (canvas.width > canvasDimensionLimit) {
+      canvas.height *= canvasDimensionLimit / canvas.width;
+      canvas.width = canvasDimensionLimit;
+    } else {
+      canvas.width *= canvasDimensionLimit / canvas.height;
+      canvas.height = canvasDimensionLimit;
+    }
+  }
+}
+function createImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      img.decode().then(() => {
+        requestAnimationFrame(() => resolve(img));
+      });
+    };
+    img.onerror = reject;
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.src = url;
+  });
+}
+async function svgToDataURL(svg) {
+  return Promise.resolve().then(() => new XMLSerializer().serializeToString(svg)).then(encodeURIComponent).then((html) => `data:image/svg+xml;charset=utf-8,${html}`);
+}
+async function nodeToDataURL(node, width, height) {
+  const xmlns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(xmlns, "svg");
+  const foreignObject = document.createElementNS(xmlns, "foreignObject");
+  svg.setAttribute("width", `${width}`);
+  svg.setAttribute("height", `${height}`);
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  foreignObject.setAttribute("width", "100%");
+  foreignObject.setAttribute("height", "100%");
+  foreignObject.setAttribute("x", "0");
+  foreignObject.setAttribute("y", "0");
+  foreignObject.setAttribute("externalResourcesRequired", "true");
+  svg.appendChild(foreignObject);
+  foreignObject.appendChild(node);
+  return svgToDataURL(svg);
+}
+var isInstanceOfElement = (node, instance) => {
+  if (node instanceof instance)
+    return true;
+  const nodePrototype = Object.getPrototypeOf(node);
+  if (nodePrototype === null)
+    return false;
+  return nodePrototype.constructor.name === instance.name || isInstanceOfElement(nodePrototype, instance);
+};
+
+// node_modules/html-to-image/es/clone-pseudos.js
+function formatCSSText(style) {
+  const content = style.getPropertyValue("content");
+  return `${style.cssText} content: '${content.replace(/'|"/g, "")}';`;
+}
+function formatCSSProperties(style, options) {
+  return getStyleProperties(options).map((name) => {
+    const value = style.getPropertyValue(name);
+    const priority = style.getPropertyPriority(name);
+    return `${name}: ${value}${priority ? " !important" : ""};`;
+  }).join(" ");
+}
+function getPseudoElementStyle(className, pseudo, style, options) {
+  const selector = `.${className}:${pseudo}`;
+  const cssText = style.cssText ? formatCSSText(style) : formatCSSProperties(style, options);
+  return document.createTextNode(`${selector}{${cssText}}`);
+}
+function clonePseudoElement(nativeNode, clonedNode, pseudo, options) {
+  const style = window.getComputedStyle(nativeNode, pseudo);
+  const content = style.getPropertyValue("content");
+  if (content === "" || content === "none") {
+    return;
+  }
+  const className = uuid();
+  try {
+    clonedNode.className = `${clonedNode.className} ${className}`;
+  } catch (err) {
+    return;
+  }
+  const styleElement = document.createElement("style");
+  styleElement.appendChild(getPseudoElementStyle(className, pseudo, style, options));
+  clonedNode.appendChild(styleElement);
+}
+function clonePseudoElements(nativeNode, clonedNode, options) {
+  clonePseudoElement(nativeNode, clonedNode, ":before", options);
+  clonePseudoElement(nativeNode, clonedNode, ":after", options);
+}
+
+// node_modules/html-to-image/es/mimes.js
+var WOFF = "application/font-woff";
+var JPEG = "image/jpeg";
+var mimes = {
+  woff: WOFF,
+  woff2: WOFF,
+  ttf: "application/font-truetype",
+  eot: "application/vnd.ms-fontobject",
+  png: "image/png",
+  jpg: JPEG,
+  jpeg: JPEG,
+  gif: "image/gif",
+  tiff: "image/tiff",
+  svg: "image/svg+xml",
+  webp: "image/webp"
+};
+function getExtension(url) {
+  const match = /\.([^./]*?)$/g.exec(url);
+  return match ? match[1] : "";
+}
+function getMimeType(url) {
+  const extension = getExtension(url).toLowerCase();
+  return mimes[extension] || "";
+}
+
+// node_modules/html-to-image/es/dataurl.js
+function getContentFromDataUrl(dataURL) {
+  return dataURL.split(/,/)[1];
+}
+function isDataUrl(url) {
+  return url.search(/^(data:)/) !== -1;
+}
+function makeDataUrl(content, mimeType) {
+  return `data:${mimeType};base64,${content}`;
+}
+async function fetchAsDataURL(url, init2, process2) {
+  const res = await fetch(url, init2);
+  if (res.status === 404) {
+    throw new Error(`Resource "${res.url}" not found`);
+  }
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onloadend = () => {
+      try {
+        resolve(process2({ res, result: reader.result }));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+var cache = {};
+function getCacheKey(url, contentType, includeQueryParams) {
+  let key = url.replace(/\?.*/, "");
+  if (includeQueryParams) {
+    key = url;
+  }
+  if (/ttf|otf|eot|woff2?/i.test(key)) {
+    key = key.replace(/.*\//, "");
+  }
+  return contentType ? `[${contentType}]${key}` : key;
+}
+async function resourceToDataURL(resourceUrl, contentType, options) {
+  const cacheKey = getCacheKey(resourceUrl, contentType, options.includeQueryParams);
+  if (cache[cacheKey] != null) {
+    return cache[cacheKey];
+  }
+  if (options.cacheBust) {
+    resourceUrl += (/\?/.test(resourceUrl) ? "&" : "?") + (/* @__PURE__ */ new Date()).getTime();
+  }
+  let dataURL;
+  try {
+    const content = await fetchAsDataURL(resourceUrl, options.fetchRequestInit, ({ res, result }) => {
+      if (!contentType) {
+        contentType = res.headers.get("Content-Type") || "";
+      }
+      return getContentFromDataUrl(result);
+    });
+    dataURL = makeDataUrl(content, contentType);
+  } catch (error) {
+    dataURL = options.imagePlaceholder || "";
+    let msg = `Failed to fetch resource: ${resourceUrl}`;
+    if (error) {
+      msg = typeof error === "string" ? error : error.message;
+    }
+    if (msg) {
+      console.warn(msg);
+    }
+  }
+  cache[cacheKey] = dataURL;
+  return dataURL;
+}
+
+// node_modules/html-to-image/es/clone-node.js
+async function cloneCanvasElement(canvas) {
+  const dataURL = canvas.toDataURL();
+  if (dataURL === "data:,") {
+    return canvas.cloneNode(false);
+  }
+  return createImage(dataURL);
+}
+async function cloneVideoElement(video, options) {
+  if (video.currentSrc) {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = video.clientWidth;
+    canvas.height = video.clientHeight;
+    ctx === null || ctx === void 0 ? void 0 : ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataURL2 = canvas.toDataURL();
+    return createImage(dataURL2);
+  }
+  const poster = video.poster;
+  const contentType = getMimeType(poster);
+  const dataURL = await resourceToDataURL(poster, contentType, options);
+  return createImage(dataURL);
+}
+async function cloneIFrameElement(iframe, options) {
+  var _a;
+  try {
+    if ((_a = iframe === null || iframe === void 0 ? void 0 : iframe.contentDocument) === null || _a === void 0 ? void 0 : _a.body) {
+      return await cloneNode(iframe.contentDocument.body, options, true);
+    }
+  } catch (_b) {
+  }
+  return iframe.cloneNode(false);
+}
+async function cloneSingleNode(node, options) {
+  if (isInstanceOfElement(node, HTMLCanvasElement)) {
+    return cloneCanvasElement(node);
+  }
+  if (isInstanceOfElement(node, HTMLVideoElement)) {
+    return cloneVideoElement(node, options);
+  }
+  if (isInstanceOfElement(node, HTMLIFrameElement)) {
+    return cloneIFrameElement(node, options);
+  }
+  return node.cloneNode(isSVGElement(node));
+}
+var isSlotElement = (node) => node.tagName != null && node.tagName.toUpperCase() === "SLOT";
+var isSVGElement = (node) => node.tagName != null && node.tagName.toUpperCase() === "SVG";
+async function cloneChildren(nativeNode, clonedNode, options) {
+  var _a, _b;
+  if (isSVGElement(clonedNode)) {
+    return clonedNode;
+  }
+  let children = [];
+  if (isSlotElement(nativeNode) && nativeNode.assignedNodes) {
+    children = toArray(nativeNode.assignedNodes());
+  } else if (isInstanceOfElement(nativeNode, HTMLIFrameElement) && ((_a = nativeNode.contentDocument) === null || _a === void 0 ? void 0 : _a.body)) {
+    children = toArray(nativeNode.contentDocument.body.childNodes);
+  } else {
+    children = toArray(((_b = nativeNode.shadowRoot) !== null && _b !== void 0 ? _b : nativeNode).childNodes);
+  }
+  if (children.length === 0 || isInstanceOfElement(nativeNode, HTMLVideoElement)) {
+    return clonedNode;
+  }
+  await children.reduce((deferred, child) => deferred.then(() => cloneNode(child, options)).then((clonedChild) => {
+    if (clonedChild) {
+      clonedNode.appendChild(clonedChild);
+    }
+  }), Promise.resolve());
+  return clonedNode;
+}
+function cloneCSSStyle(nativeNode, clonedNode, options) {
+  const targetStyle = clonedNode.style;
+  if (!targetStyle) {
+    return;
+  }
+  const sourceStyle = window.getComputedStyle(nativeNode);
+  if (sourceStyle.cssText) {
+    targetStyle.cssText = sourceStyle.cssText;
+    targetStyle.transformOrigin = sourceStyle.transformOrigin;
+  } else {
+    getStyleProperties(options).forEach((name) => {
+      let value = sourceStyle.getPropertyValue(name);
+      if (name === "font-size" && value.endsWith("px")) {
+        const reducedFont = Math.floor(parseFloat(value.substring(0, value.length - 2))) - 0.1;
+        value = `${reducedFont}px`;
+      }
+      if (isInstanceOfElement(nativeNode, HTMLIFrameElement) && name === "display" && value === "inline") {
+        value = "block";
+      }
+      if (name === "d" && clonedNode.getAttribute("d")) {
+        value = `path(${clonedNode.getAttribute("d")})`;
+      }
+      targetStyle.setProperty(name, value, sourceStyle.getPropertyPriority(name));
+    });
+  }
+}
+function cloneInputValue(nativeNode, clonedNode) {
+  if (isInstanceOfElement(nativeNode, HTMLTextAreaElement)) {
+    clonedNode.innerHTML = nativeNode.value;
+  }
+  if (isInstanceOfElement(nativeNode, HTMLInputElement)) {
+    clonedNode.setAttribute("value", nativeNode.value);
+  }
+}
+function cloneSelectValue(nativeNode, clonedNode) {
+  if (isInstanceOfElement(nativeNode, HTMLSelectElement)) {
+    const clonedSelect = clonedNode;
+    const selectedOption = Array.from(clonedSelect.children).find((child) => nativeNode.value === child.getAttribute("value"));
+    if (selectedOption) {
+      selectedOption.setAttribute("selected", "");
+    }
+  }
+}
+function decorate(nativeNode, clonedNode, options) {
+  if (isInstanceOfElement(clonedNode, Element)) {
+    cloneCSSStyle(nativeNode, clonedNode, options);
+    clonePseudoElements(nativeNode, clonedNode, options);
+    cloneInputValue(nativeNode, clonedNode);
+    cloneSelectValue(nativeNode, clonedNode);
+  }
+  return clonedNode;
+}
+async function ensureSVGSymbols(clone, options) {
+  const uses = clone.querySelectorAll ? clone.querySelectorAll("use") : [];
+  if (uses.length === 0) {
+    return clone;
+  }
+  const processedDefs = {};
+  for (let i = 0; i < uses.length; i++) {
+    const use = uses[i];
+    const id = use.getAttribute("xlink:href");
+    if (id) {
+      const exist = clone.querySelector(id);
+      const definition = document.querySelector(id);
+      if (!exist && definition && !processedDefs[id]) {
+        processedDefs[id] = await cloneNode(definition, options, true);
+      }
+    }
+  }
+  const nodes = Object.values(processedDefs);
+  if (nodes.length) {
+    const ns = "http://www.w3.org/1999/xhtml";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("xmlns", ns);
+    svg.style.position = "absolute";
+    svg.style.width = "0";
+    svg.style.height = "0";
+    svg.style.overflow = "hidden";
+    svg.style.display = "none";
+    const defs = document.createElementNS(ns, "defs");
+    svg.appendChild(defs);
+    for (let i = 0; i < nodes.length; i++) {
+      defs.appendChild(nodes[i]);
+    }
+    clone.appendChild(svg);
+  }
+  return clone;
+}
+async function cloneNode(node, options, isRoot) {
+  if (!isRoot && options.filter && !options.filter(node)) {
+    return null;
+  }
+  return Promise.resolve(node).then((clonedNode) => cloneSingleNode(clonedNode, options)).then((clonedNode) => cloneChildren(node, clonedNode, options)).then((clonedNode) => decorate(node, clonedNode, options)).then((clonedNode) => ensureSVGSymbols(clonedNode, options));
+}
+
+// node_modules/html-to-image/es/embed-resources.js
+var URL_REGEX = /url\((['"]?)([^'"]+?)\1\)/g;
+var URL_WITH_FORMAT_REGEX = /url\([^)]+\)\s*format\((["']?)([^"']+)\1\)/g;
+var FONT_SRC_REGEX = /src:\s*(?:url\([^)]+\)\s*format\([^)]+\)[,;]\s*)+/g;
+function toRegex(url) {
+  const escaped = url.replace(/([.*+?^${}()|\[\]\/\\])/g, "\\$1");
+  return new RegExp(`(url\\(['"]?)(${escaped})(['"]?\\))`, "g");
+}
+function parseURLs(cssText) {
+  const urls = [];
+  cssText.replace(URL_REGEX, (raw, quotation, url) => {
+    urls.push(url);
+    return raw;
+  });
+  return urls.filter((url) => !isDataUrl(url));
+}
+async function embed(cssText, resourceURL, baseURL, options, getContentFromUrl) {
+  try {
+    const resolvedURL = baseURL ? resolveUrl(resourceURL, baseURL) : resourceURL;
+    const contentType = getMimeType(resourceURL);
+    let dataURL;
+    if (getContentFromUrl) {
+      const content = await getContentFromUrl(resolvedURL);
+      dataURL = makeDataUrl(content, contentType);
+    } else {
+      dataURL = await resourceToDataURL(resolvedURL, contentType, options);
+    }
+    return cssText.replace(toRegex(resourceURL), `$1${dataURL}$3`);
+  } catch (error) {
+  }
+  return cssText;
+}
+function filterPreferredFontFormat(str, { preferredFontFormat }) {
+  return !preferredFontFormat ? str : str.replace(FONT_SRC_REGEX, (match) => {
+    while (true) {
+      const [src, , format] = URL_WITH_FORMAT_REGEX.exec(match) || [];
+      if (!format) {
+        return "";
+      }
+      if (format === preferredFontFormat) {
+        return `src: ${src};`;
+      }
+    }
+  });
+}
+function shouldEmbed(url) {
+  return url.search(URL_REGEX) !== -1;
+}
+async function embedResources(cssText, baseUrl, options) {
+  if (!shouldEmbed(cssText)) {
+    return cssText;
+  }
+  const filteredCSSText = filterPreferredFontFormat(cssText, options);
+  const urls = parseURLs(filteredCSSText);
+  return urls.reduce((deferred, url) => deferred.then((css) => embed(css, url, baseUrl, options)), Promise.resolve(filteredCSSText));
+}
+
+// node_modules/html-to-image/es/embed-images.js
+async function embedProp(propName, node, options) {
+  var _a;
+  const propValue = (_a = node.style) === null || _a === void 0 ? void 0 : _a.getPropertyValue(propName);
+  if (propValue) {
+    const cssString = await embedResources(propValue, null, options);
+    node.style.setProperty(propName, cssString, node.style.getPropertyPriority(propName));
+    return true;
+  }
+  return false;
+}
+async function embedBackground(clonedNode, options) {
+  ;
+  await embedProp("background", clonedNode, options) || await embedProp("background-image", clonedNode, options);
+  await embedProp("mask", clonedNode, options) || await embedProp("-webkit-mask", clonedNode, options) || await embedProp("mask-image", clonedNode, options) || await embedProp("-webkit-mask-image", clonedNode, options);
+}
+async function embedImageNode(clonedNode, options) {
+  const isImageElement = isInstanceOfElement(clonedNode, HTMLImageElement);
+  if (!(isImageElement && !isDataUrl(clonedNode.src)) && !(isInstanceOfElement(clonedNode, SVGImageElement) && !isDataUrl(clonedNode.href.baseVal))) {
+    return;
+  }
+  const url = isImageElement ? clonedNode.src : clonedNode.href.baseVal;
+  const dataURL = await resourceToDataURL(url, getMimeType(url), options);
+  await new Promise((resolve, reject) => {
+    clonedNode.onload = resolve;
+    clonedNode.onerror = options.onImageErrorHandler ? (...attributes) => {
+      try {
+        resolve(options.onImageErrorHandler(...attributes));
+      } catch (error) {
+        reject(error);
+      }
+    } : reject;
+    const image = clonedNode;
+    if (image.decode) {
+      image.decode = resolve;
+    }
+    if (image.loading === "lazy") {
+      image.loading = "eager";
+    }
+    if (isImageElement) {
+      clonedNode.srcset = "";
+      clonedNode.src = dataURL;
+    } else {
+      clonedNode.href.baseVal = dataURL;
+    }
+  });
+}
+async function embedChildren(clonedNode, options) {
+  const children = toArray(clonedNode.childNodes);
+  const deferreds = children.map((child) => embedImages(child, options));
+  await Promise.all(deferreds).then(() => clonedNode);
+}
+async function embedImages(clonedNode, options) {
+  if (isInstanceOfElement(clonedNode, Element)) {
+    await embedBackground(clonedNode, options);
+    await embedImageNode(clonedNode, options);
+    await embedChildren(clonedNode, options);
+  }
+}
+
+// node_modules/html-to-image/es/apply-style.js
+function applyStyle(node, options) {
+  const { style } = node;
+  if (options.backgroundColor) {
+    style.backgroundColor = options.backgroundColor;
+  }
+  if (options.width) {
+    style.width = `${options.width}px`;
+  }
+  if (options.height) {
+    style.height = `${options.height}px`;
+  }
+  const manual = options.style;
+  if (manual != null) {
+    Object.keys(manual).forEach((key) => {
+      style[key] = manual[key];
+    });
+  }
+  return node;
+}
+
+// node_modules/html-to-image/es/embed-webfonts.js
+var cssFetchCache = {};
+async function fetchCSS(url) {
+  let cache2 = cssFetchCache[url];
+  if (cache2 != null) {
+    return cache2;
+  }
+  const res = await fetch(url);
+  const cssText = await res.text();
+  cache2 = { url, cssText };
+  cssFetchCache[url] = cache2;
+  return cache2;
+}
+async function embedFonts(data, options) {
+  let cssText = data.cssText;
+  const regexUrl = /url\(["']?([^"')]+)["']?\)/g;
+  const fontLocs = cssText.match(/url\([^)]+\)/g) || [];
+  const loadFonts = fontLocs.map(async (loc) => {
+    let url = loc.replace(regexUrl, "$1");
+    if (!url.startsWith("https://")) {
+      url = new URL(url, data.url).href;
+    }
+    return fetchAsDataURL(url, options.fetchRequestInit, ({ result }) => {
+      cssText = cssText.replace(loc, `url(${result})`);
+      return [loc, result];
+    });
+  });
+  return Promise.all(loadFonts).then(() => cssText);
+}
+function parseCSS(source) {
+  if (source == null) {
+    return [];
+  }
+  const result = [];
+  const commentsRegex = /(\/\*[\s\S]*?\*\/)/gi;
+  let cssText = source.replace(commentsRegex, "");
+  const keyframesRegex = new RegExp("((@.*?keyframes [\\s\\S]*?){([\\s\\S]*?}\\s*?)})", "gi");
+  while (true) {
+    const matches = keyframesRegex.exec(cssText);
+    if (matches === null) {
+      break;
+    }
+    result.push(matches[0]);
+  }
+  cssText = cssText.replace(keyframesRegex, "");
+  const importRegex = /@import[\s\S]*?url\([^)]*\)[\s\S]*?;/gi;
+  const combinedCSSRegex = "((\\s*?(?:\\/\\*[\\s\\S]*?\\*\\/)?\\s*?@media[\\s\\S]*?){([\\s\\S]*?)}\\s*?})|(([\\s\\S]*?){([\\s\\S]*?)})";
+  const unifiedRegex = new RegExp(combinedCSSRegex, "gi");
+  while (true) {
+    let matches = importRegex.exec(cssText);
+    if (matches === null) {
+      matches = unifiedRegex.exec(cssText);
+      if (matches === null) {
+        break;
+      } else {
+        importRegex.lastIndex = unifiedRegex.lastIndex;
+      }
+    } else {
+      unifiedRegex.lastIndex = importRegex.lastIndex;
+    }
+    result.push(matches[0]);
+  }
+  return result;
+}
+async function getCSSRules(styleSheets, options) {
+  const ret = [];
+  const deferreds = [];
+  styleSheets.forEach((sheet) => {
+    if ("cssRules" in sheet) {
+      try {
+        toArray(sheet.cssRules || []).forEach((item, index) => {
+          if (item.type === CSSRule.IMPORT_RULE) {
+            let importIndex = index + 1;
+            const url = item.href;
+            const deferred = fetchCSS(url).then((metadata) => embedFonts(metadata, options)).then((cssText) => parseCSS(cssText).forEach((rule) => {
+              try {
+                sheet.insertRule(rule, rule.startsWith("@import") ? importIndex += 1 : sheet.cssRules.length);
+              } catch (error) {
+                console.error("Error inserting rule from remote css", {
+                  rule,
+                  error
+                });
+              }
+            })).catch((e) => {
+              console.error("Error loading remote css", e.toString());
+            });
+            deferreds.push(deferred);
+          }
+        });
+      } catch (e) {
+        const inline = styleSheets.find((a) => a.href == null) || document.styleSheets[0];
+        if (sheet.href != null) {
+          deferreds.push(fetchCSS(sheet.href).then((metadata) => embedFonts(metadata, options)).then((cssText) => parseCSS(cssText).forEach((rule) => {
+            inline.insertRule(rule, inline.cssRules.length);
+          })).catch((err) => {
+            console.error("Error loading remote stylesheet", err);
+          }));
+        }
+        console.error("Error inlining remote css file", e);
+      }
+    }
+  });
+  return Promise.all(deferreds).then(() => {
+    styleSheets.forEach((sheet) => {
+      if ("cssRules" in sheet) {
+        try {
+          toArray(sheet.cssRules || []).forEach((item) => {
+            ret.push(item);
+          });
+        } catch (e) {
+          console.error(`Error while reading CSS rules from ${sheet.href}`, e);
+        }
+      }
+    });
+    return ret;
+  });
+}
+function getWebFontRules(cssRules) {
+  return cssRules.filter((rule) => rule.type === CSSRule.FONT_FACE_RULE).filter((rule) => shouldEmbed(rule.style.getPropertyValue("src")));
+}
+async function parseWebFontRules(node, options) {
+  if (node.ownerDocument == null) {
+    throw new Error("Provided element is not within a Document");
+  }
+  const styleSheets = toArray(node.ownerDocument.styleSheets);
+  const cssRules = await getCSSRules(styleSheets, options);
+  return getWebFontRules(cssRules);
+}
+function normalizeFontFamily(font) {
+  return font.trim().replace(/["']/g, "");
+}
+function getUsedFonts(node) {
+  const fonts = /* @__PURE__ */ new Set();
+  function traverse(node2) {
+    const fontFamily = node2.style.fontFamily || getComputedStyle(node2).fontFamily;
+    fontFamily.split(",").forEach((font) => {
+      fonts.add(normalizeFontFamily(font));
+    });
+    Array.from(node2.children).forEach((child) => {
+      if (child instanceof HTMLElement) {
+        traverse(child);
+      }
+    });
+  }
+  traverse(node);
+  return fonts;
+}
+async function getWebFontCSS(node, options) {
+  const rules = await parseWebFontRules(node, options);
+  const usedFonts = getUsedFonts(node);
+  const cssTexts = await Promise.all(rules.filter((rule) => usedFonts.has(normalizeFontFamily(rule.style.fontFamily))).map((rule) => {
+    const baseUrl = rule.parentStyleSheet ? rule.parentStyleSheet.href : null;
+    return embedResources(rule.cssText, baseUrl, options);
+  }));
+  return cssTexts.join("\n");
+}
+async function embedWebFonts(clonedNode, options) {
+  const cssText = options.fontEmbedCSS != null ? options.fontEmbedCSS : options.skipFonts ? null : await getWebFontCSS(clonedNode, options);
+  if (cssText) {
+    const styleNode = document.createElement("style");
+    const sytleContent = document.createTextNode(cssText);
+    styleNode.appendChild(sytleContent);
+    if (clonedNode.firstChild) {
+      clonedNode.insertBefore(styleNode, clonedNode.firstChild);
+    } else {
+      clonedNode.appendChild(styleNode);
+    }
+  }
+}
+
+// node_modules/html-to-image/es/index.js
+async function toSvg(node, options = {}) {
+  const { width, height } = getImageSize(node, options);
+  const clonedNode = await cloneNode(node, options, true);
+  await embedWebFonts(clonedNode, options);
+  await embedImages(clonedNode, options);
+  applyStyle(clonedNode, options);
+  const datauri = await nodeToDataURL(clonedNode, width, height);
+  return datauri;
+}
+async function toCanvas(node, options = {}) {
+  const { width, height } = getImageSize(node, options);
+  const svg = await toSvg(node, options);
+  const img = await createImage(svg);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  const ratio = options.pixelRatio || getPixelRatio();
+  const canvasWidth = options.canvasWidth || width;
+  const canvasHeight = options.canvasHeight || height;
+  canvas.width = canvasWidth * ratio;
+  canvas.height = canvasHeight * ratio;
+  if (!options.skipAutoScale) {
+    checkCanvasDimensions(canvas);
+  }
+  canvas.style.width = `${canvasWidth}`;
+  canvas.style.height = `${canvasHeight}`;
+  if (options.backgroundColor) {
+    context.fillStyle = options.backgroundColor;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  context.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+async function toPng(node, options = {}) {
+  const canvas = await toCanvas(node, options);
+  return canvas.toDataURL();
+}
+
+// src/ui/screenshot.ts
+async function captureElement(el) {
+  try {
+    return await toPng(el, {
+      cacheBust: true,
+      pixelRatio: 2,
+      skipFonts: true,
+      filter: (node) => {
+        var _a, _b;
+        if ((_a = node.getAttribute) == null ? void 0 : _a.call(node, "data-instruckt")) return false;
+        if (node.tagName === "LINK" && node.getAttribute("rel") === "stylesheet") {
+          const href = (_b = node.getAttribute("href")) != null ? _b : "";
+          if (href.startsWith("http") && !href.startsWith(window.location.origin)) return false;
+        }
+        return true;
+      }
+    });
+  } catch (e) {
+    return null;
+  }
+}
+async function captureRegion(rect) {
+  try {
+    const full = await toPng(document.body, {
+      cacheBust: true,
+      pixelRatio: 2,
+      skipFonts: true,
+      filter: (node) => {
+        var _a, _b;
+        if ((_a = node.getAttribute) == null ? void 0 : _a.call(node, "data-instruckt")) return false;
+        if (node.tagName === "LINK" && node.getAttribute("rel") === "stylesheet") {
+          const href = (_b = node.getAttribute("href")) != null ? _b : "";
+          if (href.startsWith("http") && !href.startsWith(window.location.origin)) return false;
+        }
+        return true;
+      }
+    });
+    return await cropImage(full, rect);
+  } catch (e) {
+    return null;
+  }
+}
+function cropImage(dataUrl, rect) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(
+        img,
+        rect.x * ratio,
+        rect.y * ratio,
+        rect.width * ratio,
+        rect.height * ratio,
+        0,
+        0,
+        rect.width * ratio,
+        rect.height * ratio
+      );
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+function selectRegion() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    Object.assign(overlay.style, {
+      position: "fixed",
+      inset: "0",
+      zIndex: "2147483647",
+      cursor: "crosshair",
+      background: "rgba(0,0,0,0.1)"
+    });
+    overlay.setAttribute("data-instruckt", "region-select");
+    const box = document.createElement("div");
+    Object.assign(box.style, {
+      position: "fixed",
+      border: "2px dashed #6366f1",
+      background: "rgba(99,102,241,0.08)",
+      borderRadius: "4px",
+      display: "none",
+      pointerEvents: "none"
+    });
+    overlay.appendChild(box);
+    let startX = 0, startY = 0, dragging = false;
+    const onMouseDown = (e) => {
+      startX = e.clientX;
+      startY = e.clientY;
+      dragging = true;
+      box.style.display = "block";
+      updateBox(e);
+    };
+    const onMouseMove = (e) => {
+      if (!dragging) return;
+      updateBox(e);
+    };
+    const updateBox = (e) => {
+      const x = Math.min(startX, e.clientX);
+      const y = Math.min(startY, e.clientY);
+      const w = Math.abs(e.clientX - startX);
+      const h = Math.abs(e.clientY - startY);
+      Object.assign(box.style, {
+        left: `${x}px`,
+        top: `${y}px`,
+        width: `${w}px`,
+        height: `${h}px`
+      });
+    };
+    const onMouseUp = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      const x = Math.min(startX, e.clientX);
+      const y = Math.min(startY, e.clientY);
+      const w = Math.abs(e.clientX - startX);
+      const h = Math.abs(e.clientY - startY);
+      cleanup();
+      if (w < 10 || h < 10) {
+        resolve(null);
+      } else {
+        resolve(new DOMRect(x, y, w, h));
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        cleanup();
+        resolve(null);
+      }
+    };
+    const cleanup = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+    overlay.addEventListener("mousedown", onMouseDown);
+    overlay.addEventListener("mousemove", onMouseMove);
+    overlay.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("keydown", onKeyDown, true);
+    document.body.appendChild(overlay);
+  });
+}
+
 // src/ui/popup.ts
 function esc(s) {
   return String(s != null ? s : "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -750,7 +1738,7 @@ var AnnotationPopup = class {
   }
   // ── New annotation popup ──────────────────────────────────────
   showNew(pending, callbacks) {
-    var _a;
+    var _a, _b;
     this.destroy();
     this.host = document.createElement("div");
     this.host.setAttribute("data-instruckt", "popup");
@@ -763,23 +1751,56 @@ var AnnotationPopup = class {
     popup.className = "popup";
     const fwBadge = pending.framework ? `<div class="fw-badge">${esc(pending.framework.component)}</div>` : "";
     const selText = pending.selectedText ? `<div class="selected-text">"${esc(pending.selectedText.slice(0, 80))}"</div>` : "";
+    const hasScreenshot = !!pending.screenshot;
     popup.innerHTML = `
       <div class="header">
         <span class="element-tag" title="${esc(pending.elementPath)}">${esc(pending.elementLabel)}</span>
         <button class="close-btn" title="Cancel (Esc)">\u2715</button>
       </div>
       ${fwBadge}${selText}
-      <textarea placeholder="What needs to change here?" rows="3"></textarea>
+      <div class="screenshot-slot">${hasScreenshot ? `<div class="screenshot-preview"><img src="${pending.screenshot}" alt="Screenshot" /><button class="screenshot-remove" title="Remove screenshot">\u2715</button></div>` : `<button class="btn-capture" data-action="capture"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture screenshot</button>`}</div>
+      <textarea placeholder="${hasScreenshot ? "Add a note (optional)" : "What needs to change here?"}" rows="3"></textarea>
       <div class="actions">
         <button class="btn-secondary" data-action="cancel">Cancel</button>
-        <button class="btn-primary" data-action="submit" disabled>Add note</button>
+        <button class="btn-primary" data-action="submit" ${hasScreenshot ? "" : "disabled"}>Add note</button>
       </div>
     `;
+    let currentScreenshot = (_a = pending.screenshot) != null ? _a : null;
     const textarea = popup.querySelector("textarea");
     const submitBtn = popup.querySelector('[data-action="submit"]');
-    textarea.addEventListener("input", () => {
-      submitBtn.disabled = textarea.value.trim().length === 0;
-    });
+    const screenshotSlot = popup.querySelector(".screenshot-slot");
+    const updateSubmitState = () => {
+      submitBtn.disabled = !currentScreenshot && textarea.value.trim().length === 0;
+    };
+    const attachScreenshotEvents = () => {
+      const captureBtn = screenshotSlot.querySelector('[data-action="capture"]');
+      captureBtn == null ? void 0 : captureBtn.addEventListener("click", async () => {
+        captureBtn.textContent = "Capturing...";
+        const dataUrl = await captureElement(pending.element);
+        if (dataUrl) {
+          currentScreenshot = dataUrl;
+          screenshotSlot.innerHTML = `<div class="screenshot-preview"><img src="${dataUrl}" alt="Screenshot" /><button class="screenshot-remove" title="Remove screenshot">\u2715</button></div>`;
+          textarea.placeholder = "Add a note (optional)";
+          attachScreenshotEvents();
+          updateSubmitState();
+        } else {
+          captureBtn.textContent = "Capture failed";
+          setTimeout(() => {
+            if (captureBtn.parentElement) captureBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture screenshot`;
+          }, 1500);
+        }
+      });
+      const removeBtn = screenshotSlot.querySelector(".screenshot-remove");
+      removeBtn == null ? void 0 : removeBtn.addEventListener("click", () => {
+        currentScreenshot = null;
+        screenshotSlot.innerHTML = `<button class="btn-capture" data-action="capture"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Capture screenshot</button>`;
+        textarea.placeholder = "What needs to change here?";
+        attachScreenshotEvents();
+        updateSubmitState();
+      });
+    };
+    attachScreenshotEvents();
+    textarea.addEventListener("input", updateSubmitState);
     textarea.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Enter" && !e.shiftKey) {
@@ -801,12 +1822,12 @@ var AnnotationPopup = class {
     });
     submitBtn.addEventListener("click", () => {
       const comment = textarea.value.trim();
-      if (!comment) return;
-      callbacks.onSubmit({ comment });
+      if (!comment && !currentScreenshot) return;
+      callbacks.onSubmit({ comment: comment || "(screenshot)", screenshot: currentScreenshot != null ? currentScreenshot : void 0 });
       this.destroy();
     });
     this.shadow.appendChild(popup);
-    ((_a = document.getElementById("instruckt-root")) != null ? _a : document.body).appendChild(this.host);
+    ((_b = document.getElementById("instruckt-root")) != null ? _b : document.body).appendChild(this.host);
     this.positionHost(pending.x, pending.y);
     this.setupOutsideClick();
     textarea.focus();
@@ -958,7 +1979,6 @@ var AnnotationMarkers = class {
   statusClass(status) {
     if (status === "resolved") return "resolved";
     if (status === "dismissed") return "dismissed";
-    if (status === "acknowledged") return "acknowledged";
     return "";
   }
   /** Reposition all markers (e.g. after scroll or resize) */
@@ -1293,7 +2313,7 @@ var _Instruckt = class _Instruckt {
       e.stopImmediatePropagation();
     };
     this.boundClick = (e) => {
-      var _a, _b, _c, _d;
+      var _a, _b, _c;
       const target = e.target;
       if (this.isInstruckt(target)) return;
       e.preventDefault();
@@ -1307,6 +2327,8 @@ var _Instruckt = class _Instruckt {
       const nearbyText = getNearbyText(target) || void 0;
       const boundingBox = getPageBoundingBox(target);
       const framework = (_b = this.detectFramework(target)) != null ? _b : void 0;
+      (_c = this.highlight) == null ? void 0 : _c.show(target);
+      this.highlightLocked = true;
       const pending = {
         element: target,
         elementPath,
@@ -1320,21 +2342,7 @@ var _Instruckt = class _Instruckt {
         nearbyText,
         framework
       };
-      (_c = this.highlight) == null ? void 0 : _c.show(target);
-      this.highlightLocked = true;
-      (_d = this.popup) == null ? void 0 : _d.showNew(pending, {
-        onSubmit: (result) => {
-          var _a2;
-          this.highlightLocked = false;
-          (_a2 = this.highlight) == null ? void 0 : _a2.hide();
-          this.submitAnnotation(pending, result.comment);
-        },
-        onCancel: () => {
-          var _a2;
-          this.highlightLocked = false;
-          (_a2 = this.highlight) == null ? void 0 : _a2.hide();
-        }
-      });
+      this.showAnnotationPopup(pending);
     };
     this.config = __spreadValues({
       adapters: ["livewire", "vue", "svelte", "react"],
@@ -1357,6 +2365,7 @@ var _Instruckt = class _Instruckt {
       onFreezeAnimations: (frozen) => {
         this.setFrozen(frozen);
       },
+      onScreenshot: () => this.startRegionCapture(),
       onCopy: () => this.copyToClipboard(true),
       onClearPage: () => this.clearPage(),
       onClearAll: () => this.clearEverything(),
@@ -1385,6 +2394,7 @@ var _Instruckt = class _Instruckt {
       onFreezeAnimations: (frozen) => {
         this.setFrozen(frozen);
       },
+      onScreenshot: () => this.startRegionCapture(),
       onCopy: () => this.copyToClipboard(true),
       onClearPage: () => this.clearPage(),
       onClearAll: () => this.clearEverything(),
@@ -1618,6 +2628,22 @@ var _Instruckt = class _Instruckt {
       `;
     document.head.appendChild(this.frozenStyleEl);
   }
+  showAnnotationPopup(pending) {
+    var _a;
+    (_a = this.popup) == null ? void 0 : _a.showNew(pending, {
+      onSubmit: (result) => {
+        var _a2;
+        this.highlightLocked = false;
+        (_a2 = this.highlight) == null ? void 0 : _a2.hide();
+        this.submitAnnotation(pending, result.comment, result.screenshot);
+      },
+      onCancel: () => {
+        var _a2;
+        this.highlightLocked = false;
+        (_a2 = this.highlight) == null ? void 0 : _a2.hide();
+      }
+    });
+  }
   attachAnnotateListeners() {
     document.addEventListener("mousemove", this.boundMouseMove);
     document.addEventListener("mouseleave", this.boundMouseLeave);
@@ -1637,6 +2663,39 @@ var _Instruckt = class _Instruckt {
   isInstruckt(el) {
     if (!el || !(el instanceof Element)) return false;
     return el.closest("[data-instruckt]") !== null;
+  }
+  // ── Region screenshot ────────────────────────────────────────
+  async startRegionCapture() {
+    var _a, _b;
+    const wasAnnotating = this.isAnnotating;
+    if (wasAnnotating) this.setAnnotating(false);
+    const rect = await selectRegion();
+    if (!rect) {
+      if (wasAnnotating) this.setAnnotating(true);
+      return;
+    }
+    const screenshot = await captureRegion(rect);
+    if (!screenshot) {
+      if (wasAnnotating) this.setAnnotating(true);
+      return;
+    }
+    const centerX = rect.x + rect.width / 2;
+    const centerY = rect.y + rect.height / 2;
+    const target = (_a = document.elementFromPoint(centerX, centerY)) != null ? _a : document.body;
+    const pending = {
+      element: target,
+      elementPath: getElementSelector(target),
+      elementName: getElementName(target),
+      elementLabel: getElementLabel(target),
+      cssClasses: getCssClasses(target),
+      boundingBox: getPageBoundingBox(target),
+      x: centerX,
+      y: centerY,
+      nearbyText: getNearbyText(target) || void 0,
+      screenshot,
+      framework: (_b = this.detectFramework(target)) != null ? _b : void 0
+    };
+    this.showAnnotationPopup(pending);
   }
   // ── Framework detection ───────────────────────────────────────
   detectFramework(el) {
@@ -1661,7 +2720,7 @@ var _Instruckt = class _Instruckt {
     return null;
   }
   // ── Submit ────────────────────────────────────────────────────
-  async submitAnnotation(pending, comment) {
+  async submitAnnotation(pending, comment, screenshot) {
     var _a, _b;
     const payload = {
       x: pending.x / window.innerWidth * 100,
@@ -1673,6 +2732,7 @@ var _Instruckt = class _Instruckt {
       boundingBox: pending.boundingBox,
       selectedText: pending.selectedText,
       nearbyText: pending.nearbyText,
+      screenshot,
       intent: "fix",
       severity: "important",
       framework: pending.framework,
@@ -1685,7 +2745,6 @@ var _Instruckt = class _Instruckt {
       annotation = __spreadProps(__spreadValues({}, payload), {
         id: crypto.randomUUID(),
         status: "pending",
-        thread: [],
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
@@ -1768,6 +2827,9 @@ var _Instruckt = class _Instruckt {
     if (e.key === "f" && !e.metaKey && !e.ctrlKey && !e.altKey) {
       this.setFrozen(!this.isFrozen);
     }
+    if (e.key === "c" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      this.startRegionCapture();
+    }
     if (e.key === "x" && !e.metaKey && !e.ctrlKey && !e.altKey) {
       this.clearPage();
     }
@@ -1842,6 +2904,13 @@ No open annotations.`;
           lines.push(`- Text: "${a.selectedText}"`);
         } else if (a.nearbyText) {
           lines.push(`- Text: "${a.nearbyText.slice(0, 100)}"`);
+        }
+        if (a.screenshot) {
+          if (!a.screenshot.startsWith("data:")) {
+            lines.push(`- Screenshot: \`storage/app/_instruckt/${a.screenshot}\``);
+          } else {
+            lines.push(`- Screenshot: attached`);
+          }
         }
         lines.push("");
       });

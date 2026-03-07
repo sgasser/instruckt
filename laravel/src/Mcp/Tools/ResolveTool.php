@@ -11,7 +11,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('Mark an annotation as resolved. Optionally provide a summary of what was changed — it will be posted as an agent reply visible to the user.')]
+#[Description('Mark an annotation as resolved after fixing the issue.')]
 final class ResolveTool extends Tool
 {
     public function handle(Request $request): Response
@@ -21,10 +21,6 @@ final class ResolveTool extends Tool
             'resolved_by' => 'agent',
             'resolved_at' => now()->toIso8601String(),
         ]);
-
-        if ($summary = $request->get('summary')) {
-            $annotation = Store::addThreadMessage($annotation['id'], 'agent', $summary);
-        }
 
         return Response::text(json_encode([
             'ok' => true,
@@ -38,8 +34,6 @@ final class ResolveTool extends Tool
             'annotation_id' => $schema->string()
                 ->description('The annotation ID to resolve.')
                 ->required(),
-            'summary' => $schema->string()
-                ->description('Optional summary of what was changed to address this feedback.'),
         ];
     }
 }

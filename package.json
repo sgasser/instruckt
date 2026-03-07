@@ -32,5 +32,8 @@
     "oxlint": "^1.51.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13"
   }
 }

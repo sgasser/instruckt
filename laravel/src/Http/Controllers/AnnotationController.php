@@ -27,6 +27,7 @@ final class AnnotationController
             'nearby_text' => 'nullable|string|max:500',
             'selected_text' => 'nullable|string|max:500',
             'bounding_box' => 'nullable|array',
+            'screenshot' => 'nullable|string',
             'intent' => 'sometimes|string|in:fix,change,question,approve',
             'severity' => 'sometimes|string|in:blocking,important,suggestion',
             'framework' => 'nullable|array',
@@ -41,33 +42,16 @@ final class AnnotationController
     public function update(Request $request, string $id): JsonResponse
     {
         $data = $request->validate([
-            'status' => 'sometimes|string|in:pending,acknowledged,resolved,dismissed',
+            'status' => 'sometimes|string|in:pending,resolved,dismissed',
             'comment' => 'sometimes|string|max:2000',
-            'resolved_by' => 'sometimes|string|in:human,agent',
         ]);
 
         if (isset($data['status']) && in_array($data['status'], ['resolved', 'dismissed'], true)) {
             $data['resolved_at'] = now()->toIso8601String();
-            $data['resolved_by'] = $data['resolved_by'] ?? 'agent';
+            $data['resolved_by'] = 'human';
         }
 
         $annotation = Store::updateAnnotation($id, $data);
-
-        return response()->json($annotation);
-    }
-
-    public function reply(Request $request, string $id): JsonResponse
-    {
-        $request->validate([
-            'role' => 'required|string|in:human,agent',
-            'content' => 'required|string|max:2000',
-        ]);
-
-        $annotation = Store::addThreadMessage(
-            $id,
-            $request->input('role'),
-            $request->input('content'),
-        );
 
         return response()->json($annotation);
     }

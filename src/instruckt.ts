@@ -7,6 +7,7 @@ import { AnnotationPopup } from './ui/popup'
 import { AnnotationMarkers } from './ui/markers'
 import { injectGlobalStyles } from './ui/styles'
 import { getElementSelector, getElementName, getElementLabel, getNearbyText, getCssClasses, getPageBoundingBox } from './selector'
+import { captureElement, captureRegion, selectRegion } from './ui/screenshot'
 import * as livewireAdapter from './adapters/livewire'
 import * as vueAdapter from './adapters/vue'
 import * as svelteAdapter from './adapters/svelte'
@@ -67,6 +68,7 @@ export class Instruckt {
       onFreezeAnimations: (frozen) => {
         this.setFrozen(frozen)
       },
+      onScreenshot: () => this.startRegionCapture(),
       onCopy: () => this.copyToClipboard(true),
       onClearPage: () => this.clearPage(),
       onClearAll: () => this.clearEverything(),
@@ -104,6 +106,7 @@ export class Instruckt {
       onFreezeAnimations: (frozen: boolean) => {
         this.setFrozen(frozen)
       },
+      onScreenshot: () => this.startRegionCapture(),
       onCopy: () => this.copyToClipboard(true),
       onClearPage: () => this.clearPage(),
       onClearAll: () => this.clearEverything(),
@@ -451,6 +454,9 @@ export class Instruckt {
     const boundingBox = getPageBoundingBox(target)
     const framework = this.detectFramework(target) ?? undefined
 
+    this.highlight?.show(target)
+    this.highlightLocked = true
+
     const pending: PendingAnnotation = {
       element: target,
       elementPath,
@@ -465,14 +471,15 @@ export class Instruckt {
       framework,
     }
 
-    this.highlight?.show(target)
-    this.highlightLocked = true
+    this.showAnnotationPopup(pending)
+  }
 
+  private showAnnotationPopup(pending: PendingAnnotation): void {
     this.popup?.showNew(pending, {
       onSubmit: (result) => {
         this.highlightLocked = false
         this.highlight?.hide()
-        this.submitAnnotation(pending, result.comment)
+        this.submitAnnotation(pending, result.comment, result.screenshot)
       },
       onCancel: () => {
         this.highlightLocked = false
@@ -507,6 +514,47 @@ export class Instruckt {
     return el.closest('[data-instruckt]') !== null
   }
 
+  // ── Region screenshot ────────────────────────────────────────
+
+  private async startRegionCapture(): Promise<void> {
+    // Temporarily exit annotation mode so the crosshair doesn't interfere
+    const wasAnnotating = this.isAnnotating
+    if (wasAnnotating) this.setAnnotating(false)
+
+    const rect = await selectRegion()
+    if (!rect) {
+      if (wasAnnotating) this.setAnnotating(true)
+      return
+    }
+
+    const screenshot = await captureRegion(rect)
+    if (!screenshot) {
+      if (wasAnnotating) this.setAnnotating(true)
+      return
+    }
+
+    // Find the element at the center of the selected region
+    const centerX = rect.x + rect.width / 2
+    const centerY = rect.y + rect.height / 2
+    const target = document.elementFromPoint(centerX, centerY) ?? document.body
+
+    const pending: PendingAnnotation = {
+      element: target,
+      elementPath: getElementSelector(target),
+      elementName: getElementName(target),
+      elementLabel: getElementLabel(target),
+      cssClasses: getCssClasses(target),
+      boundingBox: getPageBoundingBox(target),
+      x: centerX,
+      y: centerY,
+      nearbyText: getNearbyText(target) || undefined,
+      screenshot,
+      framework: this.detectFramework(target) ?? undefined,
+    }
+
+    this.showAnnotationPopup(pending)
+  }
+
   // ── Framework detection ───────────────────────────────────────
 
   private detectFramework(el: Element) {
@@ -532,7 +580,7 @@ export class Instruckt {
 
   // ── Submit ────────────────────────────────────────────────────
 
-  private async submitAnnotation(pending: PendingAnnotation, comment: string): Promise<void> {
+  private async submitAnnotation(pending: PendingAnnotation, comment: string, screenshot?: string): Promise<void> {
     const payload: AnnotationPayload = {
       x: (pending.x / window.innerWidth) * 100,
       y: pending.y + window.scrollY,
@@ -543,6 +591,7 @@ export class Instruckt {
       boundingBox: pending.boundingBox,
       selectedText: pending.selectedText,
       nearbyText: pending.nearbyText,
+      screenshot,
       intent: 'fix',
       severity: 'important',
       framework: pending.framework,
@@ -558,7 +607,6 @@ export class Instruckt {
         ...payload,
         id: crypto.randomUUID(),
         status: 'pending',
-        thread: [],
         createdAt: new Date().toISOString(),
       }
     }
@@ -648,6 +696,9 @@ export class Instruckt {
     if (e.key === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       this.setFrozen(!this.isFrozen)
     }
+    if (e.key === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      this.startRegionCapture()
+    }
     if (e.key === 'x' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       this.clearPage()
     }
@@ -732,6 +783,14 @@ export class Instruckt {
           lines.push(`- Text: "${a.selectedText}"`)
         } else if (a.nearbyText) {
           lines.push(`- Text: "${a.nearbyText.slice(0, 100)}"`)
+        }
+        if (a.screenshot) {
+          // If stored as a relative path (from backend), show the full path
+          if (!a.screenshot.startsWith('data:')) {
+            lines.push(`- Screenshot: \`storage/app/_instruckt/${a.screenshot}\``)
+          } else {
+            lines.push(`- Screenshot: attached`)
+          }
         }
         lines.push('')
       })
