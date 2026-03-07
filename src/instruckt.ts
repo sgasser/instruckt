@@ -808,6 +808,16 @@ export class Instruckt {
       })
     }
 
+    // Add MCP instructions when a backend is configured
+    const hasScreenshots = pending.some(a => a.screenshot && !a.screenshot.startsWith('data:'))
+    lines.push('---')
+    lines.push('')
+    if (hasScreenshots) {
+      lines.push('Use the `instruckt.get_screenshot` MCP tool to view screenshots. After making changes, use `instruckt.resolve` to mark each annotation as resolved.')
+    } else {
+      lines.push('After making changes, use the `instruckt.resolve` MCP tool to mark each annotation as resolved.')
+    }
+
     return lines.join('\n').trim()
   }
 
